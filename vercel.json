@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "cleanUrls": true,
   "trailingSlash": false,
-  "rewrites": [
+  "redirects": [
     {
       "source": "/",
       "has": [
@@ -14,10 +14,11 @@
           "value": ".*([Bb]ot|[Cc]rawler|[Ss]pider|[Dd]iscord|[Ss]lack|[Tt]elegram|facebookexternalhit|[Ww]hats[Aa]pp|[Kk]akao|[Ee]mbedly|[Ii]framely|[Pp]review|[Uu]nfurl|[Oo]pen[Gg]raph).*"
         }
       ],
-      "destination": "/api/card"
-    },
-    { "source": "/((?!assets/|api/).*)", "destination": "/index.html" }
+      "destination": "/api/card",
+      "permanent": false
+    }
   ],
+  "rewrites": [{ "source": "/((?!assets/|api/).*)", "destination": "/index.html" }],
   "headers": [
     {
       "source": "/(.*)",

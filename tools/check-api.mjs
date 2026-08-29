@@ -127,7 +127,11 @@ async function call(handler, ...args) {
     const unknownTop = Object.keys(config).filter(key => !TOP.has(key));
     check('설정: 최상위 키가 모두 알려진 것이다', unknownTop.length === 0, unknownTop.join(' · '));
 
-    const RULE = { rewrites: ['source', 'destination', 'has', 'missing'], headers: ['source', 'headers', 'has', 'missing'] };
+    const RULE = {
+      rewrites: ['source', 'destination', 'has', 'missing'],
+      redirects: ['source', 'destination', 'has', 'missing', 'permanent', 'statusCode'],
+      headers: ['source', 'headers', 'has', 'missing'],
+    };
     for (const [section, allowed] of Object.entries(RULE)) {
       const bad = [];
       for (const [index, rule] of (config[section] ?? []).entries()) {
@@ -141,7 +145,7 @@ async function call(handler, ...args) {
     // has 의 정규식이 실제로 컴파일되는가. Vercel 은 Rust 엔진을 쓰지만
     // 인라인 플래그 같은 것을 안 쓰면 자바스크립트에서도 같은 뜻이다.
     const patterns = [];
-    for (const rule of config.rewrites ?? []) {
+    for (const rule of [...(config.rewrites ?? []), ...(config.redirects ?? [])]) {
       for (const condition of rule.has ?? []) {
         if (condition.value) patterns.push(condition.value);
       }
@@ -165,9 +169,30 @@ async function call(handler, ...args) {
     );
 
     // 크롤러 규칙이 실제로 크롤러를 잡는가
-    const crawlerRule = (config.rewrites ?? []).find(rule => rule.destination === '/api/card');
+    //
+    // **redirects 여야 한다.** Vercel 은 redirects → 파일시스템 → rewrites 순서로
+    // 본다. 우리가 가로채려는 자리는 `/` 이고 거기에는 실제 index.html 이 있다.
+    // rewrites 에 두면 파일이 먼저 잡혀 규칙까지 오지 않는다. 처음에 rewrites 로
+    // 썼다가 로고 그림만 뜨는 것을 보고 알았다.
+    const crawlerRule = (config.redirects ?? []).find(rule => rule.destination === '/api/card');
     check('설정: 크롤러를 /api/card 로 보내는 규칙이 있다', Boolean(crawlerRule));
+    check(
+      '설정: 크롤러 규칙이 redirects 에 있다',
+      !(config.rewrites ?? []).some(rule => rule.destination === '/api/card'),
+      'rewrites 는 파일시스템 뒤에 온다. / 에는 index.html 이 있어 안 걸린다',
+    );
     if (crawlerRule) {
+      check(
+        '설정: 크롤러 규칙이 / 의 ?a= 만 잡는다',
+        crawlerRule.source === '/' &&
+          crawlerRule.has?.some(c => c.type === 'query' && c.key === 'a'),
+        `${crawlerRule.source}`,
+      );
+      check(
+        '설정: 크롤러 규칙이 영구 이동이 아니다',
+        crawlerRule.permanent === false || crawlerRule.statusCode === 302,
+        '영구로 두면 브라우저가 기억해 사람도 카드로 간다',
+      );
       const agent = crawlerRule.has?.find(c => c.type === 'header')?.value;
       const test = new RegExp(`^${agent}$`);
       const shouldMatch = [
