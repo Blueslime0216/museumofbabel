@@ -106,12 +106,20 @@ export function createSearch({ toast, onGo, getWorld }) {
   floorRow.addEventListener('click', event => {
     const button = event.target.closest('.segment');
     if (!button) return;
-    searchTier = Number(button.dataset.tier);
+    const next = Number(button.dataset.tier);
+    if (next === searchTier) return;
+    searchTier = next;
     renderFloors();
+
     // 층이 바뀌면 앞서 찾아 둔 결과는 뜻이 없다.
     compare.hidden = true;
     found = null;
     goButton.textContent = t('common.go');
+
+    // **올린 그림이 있으면 그 자리에서 새 층을 다시 찾는다.**
+    //   다시 올리게 하면 "같은 그림이 층마다 어디에 있나" 를 견주기가 번거롭다.
+    //   층을 눌러 보는 것 자체가 그 비교다.
+    if (picture) project(picture);
   });
 
   let worker = null;
@@ -119,6 +127,15 @@ export function createSearch({ toast, onGo, getWorld }) {
   let busy = false;
   let found = null; // 투영으로 찾은 목적지
   let guard = 0; // 워커가 아무 말도 하지 않을 때를 위한 시간 제한
+
+  /**
+   * 마지막으로 올린 그림. 층을 바꿀 때 다시 쓴다.
+   *
+   * 비트맵이 아니라 Blob 을 남긴다. 비트맵은 워커로 넘길 때 소유권이 옮겨 가서
+   * 이쪽에서는 못 쓰게 된다. Blob 이면 필요할 때 다시 만들면 된다.
+   * 청크로 곧바로 찾은 그림은 남기지 않는다. 그 그림에는 층이 이미 적혀 있다.
+   */
+  let picture = null;
 
   /**
    * 매달리지 않게 한다.
@@ -153,6 +170,15 @@ export function createSearch({ toast, onGo, getWorld }) {
         return;
       }
 
+      // 기다리는 동안 층이 바뀌었다. 이 결과는 옛 층의 것이다.
+      // 화면에 보여 주지 않고 새 층으로 다시 찾는다.
+      if (message.tier !== searchTier) {
+        message.before?.close?.();
+        message.after?.close?.();
+        if (picture) project(picture);
+        return;
+      }
+
       found = {
         tier: message.tier,
         locality: message.locality,
@@ -180,6 +206,7 @@ export function createSearch({ toast, onGo, getWorld }) {
     file.value = '';
     compare.hidden = true;
     found = null;
+    picture = null;
     stopWaiting();
     goButton.textContent = t('common.go');
   }
@@ -198,6 +225,46 @@ export function createSearch({ toast, onGo, getWorld }) {
   }
 
   // ── 이미지 ─────────────────────────────────────────────────────────────
+
+  /**
+   * 그림 하나를 지금 고른 층에 투영한다.
+   *
+   * 층을 바꿀 때도 이것을 다시 부른다. 그래서 그림을 받는 일(accept)과
+   * 투영하는 일을 나눠 두었다.
+   */
+  async function project(blob) {
+    if (busy) return;
+
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(blob);
+    } catch {
+      toast(t('toast.badPicture'));
+      return;
+    }
+
+    picture = blob;
+    busy = true;
+    dropzone.dataset.busy = '1';
+    compare.hidden = true;
+    found = null;
+    goButton.textContent = t('common.go');
+
+    // 휴대폰에서 층 8 투영이 몇 초 걸린다. 넉넉히 주되 무한히 기다리지 않는다.
+    clearTimeout(guard);
+    guard = setTimeout(() => stopWaiting(t('toast.projectFailed')), PROJECT_TIMEOUT_MS);
+
+    ensureWorker().postMessage(
+      {
+        type: 'project',
+        id: ++sequence,
+        tier: searchTier,
+        locality: getWorld().locality,
+        bitmap,
+      },
+      [bitmap],
+    );
+  }
 
   async function accept(blob) {
     if (busy) return;
@@ -221,33 +288,7 @@ export function createSearch({ toast, onGo, getWorld }) {
       }
     }
 
-    let bitmap;
-    try {
-      bitmap = await createImageBitmap(blob);
-    } catch {
-      toast(t('toast.badPicture'));
-      return;
-    }
-
-    busy = true;
-    dropzone.dataset.busy = '1';
-    compare.hidden = true;
-    found = null;
-
-    // 휴대폰에서 층 8 투영이 몇 초 걸린다. 넉넉히 주되 무한히 기다리지 않는다.
-    clearTimeout(guard);
-    guard = setTimeout(() => stopWaiting(t('toast.projectFailed')), PROJECT_TIMEOUT_MS);
-
-    ensureWorker().postMessage(
-      {
-        type: 'project',
-        id: ++sequence,
-        tier: searchTier,
-        locality: getWorld().locality,
-        bitmap,
-      },
-      [bitmap],
-    );
+    await project(blob);
   }
 
   dropzone.addEventListener('click', () => file.click());
