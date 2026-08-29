@@ -12,7 +12,19 @@
       content="Every possible picture already hangs here. You only need the address."
     />
     <title>Museum of Babel</title>
+
+    <!-- 아이콘.
+         favicon.svg   벡터. 16px 에서도 육각형이 읽힌다
+         icon-*.png    무늬로 채운 로고. 어두운 벽 위에 얹어 불투명하게 만들었다
+                       (iOS 는 apple-touch-icon 의 투명한 자리를 검게 칠한다)
+         05_로고 생성기 에서 뽑았다. 주소는 ! - dev/작업노트.md 에 적어 두었다 -->
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#12100e" />
+    <meta name="apple-mobile-web-app-title" content="Babel" />
+
     <link rel="stylesheet" href="./src/styles/base.css" />
     <link rel="stylesheet" href="./src/styles/stage.css" />
     <link rel="stylesheet" href="./src/styles/surface.css" />
