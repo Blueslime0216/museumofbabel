@@ -15,8 +15,18 @@ import { worldToScreen } from './camera.mjs';
 /** 전시물 사이의 벽. 한 변에 대한 비율. */
 const GAP = 0.06;
 
-/** 이 크기를 넘으면 얇은 액자선이 생긴다. */
-const FRAME_AT = 200;
+/**
+ * 전시물의 외곽선. 모든 전시물이 크기와 무관하게 같은 선을 갖는다.
+ *
+ * 굵기는 화면 픽셀로 고정한다. 줌에 따라 굵어지면 줌인했을 때 액자가 아니라
+ * 검은 띠가 된다.
+ *
+ * 경계에 **걸쳐서** 그린다 (안쪽 1px · 바깥쪽 1px). 안쪽으로만 그리면 최소
+ * 줌(한 변 약 52px)에서 그림 면적의 14%를 먹는다. 바깥쪽 1px 은 어차피
+ * 전시물 사이의 벽이라 잃는 것이 없다.
+ */
+const EDGE_WIDTH = 2;
+const EDGE_COLOR = '#000';
 
 /** 고른 것 외를 덮는 정도. */
 const DIM_ALPHA = 0.68;
@@ -183,6 +193,9 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e', reducedMo
    *
    * 커진 칸은 옆 칸보다 **나중에** 찍어야 한다. 그리는 순서가 화면 중앙부터라서,
    * 먼저 찍으면 뒤에 오는 옆 칸이 커진 테두리를 덮는다. draw 가 그 순서를 맡는다.
+   *
+   * 외곽선을 그림 위에 두르는 이유가 하나 더 있다. 고른 것이 커지면 옆 칸을 물고
+   * 들어가는데, 선이 있어야 어디까지가 어느 작품인지 보인다.
    */
   function paintCell(item, grow = 0) {
     const bitmap = tiles.get(item.key);
@@ -195,11 +208,9 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e', reducedMo
 
     ctx.drawImage(bitmap, left, top, inner, inner);
 
-    if (inner > FRAME_AT) {
-      ctx.strokeStyle = 'rgba(239,233,221,0.16)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(left + 0.5, top + 0.5, inner - 1, inner - 1);
-    }
+    ctx.strokeStyle = EDGE_COLOR;
+    ctx.lineWidth = EDGE_WIDTH;
+    ctx.strokeRect(left, top, inner, inner);
     return true;
   }
 
