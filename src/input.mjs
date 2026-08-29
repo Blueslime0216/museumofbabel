@@ -18,13 +18,36 @@ const WHEEL_STEP = 0.0016; // 휠 한 칸이 줌에 곱해지는 정도
  * 함께 옮기므로 camera.update() 가 "변화 없음" 을 돌려준다. 그러면 프레임 루프가
  * 다시 그릴 이유를 못 찾고, 손을 뗄 때 한 번에 몰아서 보인다. 실제로 그랬다.
  */
-export function createInput({ element, camera, stage, onTap, onChange, onGestureEnd, isBlocked }) {
+export function createInput({
+  element,
+  camera,
+  stage,
+  onTap,
+  onChange,
+  onDragStart,
+  onGestureEnd,
+  isBlocked,
+}) {
   const pointers = new Map();
   let gesture = null; // 두 손가락일 때의 기준
   let moved = 0;
   let startedAt = 0;
   let velocity = { x: 0, y: 0 };
   let lastMove = 0;
+  /** 이번 제스처가 "돌아다니기" 로 판정됐는지. 한 번만 알린다. */
+  let announced = false;
+
+  /**
+   * 손이 실제로 미술관을 움직이기 시작했다.
+   *
+   * pointerdown 만으로는 탭과 구분할 수 없다. 6px 을 넘겨야 끌기다.
+   * 핀치는 시작하는 순간 곧바로 돌아다니기로 본다.
+   */
+  function announceDrag() {
+    if (announced) return;
+    announced = true;
+    onDragStart?.();
+  }
 
   const blocked = () => (isBlocked ? isBlocked() : false);
 
@@ -47,6 +70,7 @@ export function createInput({ element, camera, stage, onTap, onChange, onGesture
 
     if (pointers.size === 1) {
       moved = 0;
+      announced = false;
       startedAt = performance.now();
       velocity = { x: 0, y: 0 };
     }
@@ -56,6 +80,7 @@ export function createInput({ element, camera, stage, onTap, onChange, onGesture
         distance: Math.hypot(a[0] - b[0], a[1] - b[1]),
         zoom: camera.zoom,
       };
+      announceDrag();
     }
   });
 
@@ -83,6 +108,7 @@ export function createInput({ element, camera, stage, onTap, onChange, onGesture
     }
 
     // 한 손가락 · 마우스 이동
+    if (moved > TAP_SLOP) announceDrag();
     camera.dragBy(-dx / camera.zoom, -dy / camera.zoom);
     onChange?.();
 

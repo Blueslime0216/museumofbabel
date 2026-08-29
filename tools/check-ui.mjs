@@ -200,6 +200,66 @@ for (const size of ['mobile', 'desktop']) {
   await page.close();
 }
 
+// ── 3.4 — 고른 것을 놓는 두 경로 ─────────────────────────────────────────
+
+{
+  const page = await openPage('desktop');
+  await settled(page);
+  await page.waitForTimeout(300);
+
+  /** 구석의 밝기. 고른 것이 있으면 나머지가 어두워진다. */
+  const corner = () =>
+    page.evaluate(() => {
+      const canvas = document.getElementById('stage');
+      const data = canvas
+        .getContext('2d')
+        .getImageData(Math.round(canvas.width * 0.08), Math.round(canvas.height * 0.12), 1, 1).data;
+      return Math.round((data[0] + data[1] + data[2]) / 3);
+    });
+  const sheetState = () => page.evaluate(() => document.getElementById('sheet').dataset.state);
+
+  const plain = await corner();
+  await page.mouse.click(500, 420);
+  await page.waitForTimeout(700);
+  const dimmed = await corner();
+  check('고르면 나머지가 어두워진다', dimmed < plain, `${plain} → ${dimmed}`);
+  check('고르면 시트가 열린다', (await sheetState()) === 'peek');
+
+  // 같은 것을 한 번 더 누르면 놓는다. 고른 것은 가운데로 와 있다.
+  await page.mouse.click(640, 430);
+  await page.waitForTimeout(700);
+  const released = await corner();
+  check('같은 것을 다시 누르면 놓는다', released > dimmed, `${dimmed} → ${released}`);
+  check('놓으면 시트가 닫힌다', (await sheetState()) === 'hidden');
+
+  // 끌기 시작하면 놓는다
+  await page.mouse.click(500, 300);
+  await page.waitForTimeout(700);
+  const dimmedAgain = await corner();
+  await page.mouse.move(640, 430);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(640 - i * 10, 430 - i * 4);
+  const duringDrag = await corner();
+  const sheetDuringDrag = await sheetState();
+  await page.mouse.up();
+  check('끌기 시작하면 놓는다', duringDrag > dimmedAgain, `${dimmedAgain} → ${duringDrag}`);
+  check('끌기 시작하면 시트가 닫힌다', sheetDuringDrag === 'hidden');
+
+  // 6px 문턱 아래의 흔들림은 탭으로 남는다
+  await page.mouse.click(500, 300);
+  await page.waitForTimeout(700);
+  await page.mouse.move(640, 430);
+  await page.mouse.down();
+  await page.mouse.move(642, 431);
+  await page.waitForTimeout(120);
+  const tiny = await sheetState();
+  await page.mouse.up();
+  check('작은 흔들림은 끌기로 보지 않는다', tiny !== 'hidden', `시트 ${tiny}`);
+
+  check('포커스 작업에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
+  await page.close();
+}
+
 // ── 3.5 — 층 ─────────────────────────────────────────────────────────────
 
 {

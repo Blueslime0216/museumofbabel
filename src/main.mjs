@@ -133,9 +133,7 @@ function applyWorld() {
  * 첫 진입은 이미 검은 화면이므로 암전을 건너뛴다.
  */
 function goto(next, { first = false } = {}) {
-  sheet.close();
-  stage.setFocus(null);
-  stage.setDim(0);
+  clearFocus();
 
   const prepare = async () => {
     state = { ...state, ...next };
@@ -192,6 +190,21 @@ function focusCell(i, j, { reading = false } = {}) {
   dirty = true;
 }
 
+/**
+ * 고른 것을 놓는다. 어두워진 것이 풀리고 시트가 닫힌다.
+ *
+ * 시트를 함께 닫는 이유. 시트는 "고른 전시물의 정보" 다. 고른 것이 없는데
+ * 제목 줄이 남아 있으면 화면이 거짓말을 한다.
+ */
+function clearFocus() {
+  if (!stage.focus && !sheet.open) return;
+  stage.setFocus(null);
+  stage.setDim(0);
+  sheet.close();
+  wantedForSheet = null;
+  dirty = true;
+}
+
 // ── 입력 ─────────────────────────────────────────────────────────────────
 
 const input = createInput({
@@ -202,7 +215,20 @@ const input = createInput({
   onTap: (i, j) => {
     keyboardMode = false;
     document.body.dataset.keyboard = '0';
+
+    // 고른 것을 한 번 더 누르면 놓는다. 누른 곳이 어디든 토글로 읽힌다.
+    const focus = stage.focus;
+    if (focus && focus.i === i && focus.j === j) {
+      clearFocus();
+      return;
+    }
     focusCell(i, j);
+  },
+  // 손이 미술관을 움직이기 시작하면 고른 것을 놓는다.
+  // 돌아다니는 중에 한 작품만 밝은 채로 남으면 방해가 된다.
+  onDragStart: () => {
+    hint.hide();
+    clearFocus();
   },
   // 카메라를 건드릴 때마다 다시 그린다. 이것이 없으면 드래그가 뚝뚝 끊긴다.
   onChange: () => {
@@ -214,8 +240,9 @@ const input = createInput({
   },
 });
 
+// 손을 대는 순간에는 접기만 한다. 아직 탭인지 끌기인지 모른다.
+// 실제로 끌기 시작하면 onDragStart 가 포커스까지 놓는다.
 canvas.addEventListener('pointerdown', () => {
-  hint.hide();
   sheet.collapse();
 });
 
@@ -241,12 +268,9 @@ window.addEventListener('keydown', event => {
   if (event.target instanceof HTMLInputElement) return;
 
   if (event.key === 'Escape') {
+    // 시트가 한 단계씩 접히고, 다 접히면 고른 것도 놓는다.
     if (sheet.escape()) {
-      if (!sheet.open) {
-        stage.setFocus(null);
-        stage.setDim(0);
-        dirty = true;
-      }
+      if (!sheet.open) clearFocus();
       event.preventDefault();
     }
     return;
