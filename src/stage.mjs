@@ -153,6 +153,10 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
       return focus;
     },
 
+    get dim() {
+      return dim;
+    },
+
     setDim(value) {
       dim = value;
     },

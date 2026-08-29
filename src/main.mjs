@@ -388,6 +388,10 @@ Object.assign(window, {
     get curtain() {
       return { phase: curtain.phase, open: curtain.openProgress, dim: curtain.dimProgress };
     },
+    /** 고른 것과 어둡게 하는 정도. 화면 검사가 이것을 본다. */
+    get focus() {
+      return { cell: stage.focus, dim: stage.dim };
+    },
     get sheet() {
       return { state: sheet.state, title: sheet.artwork?.info?.title ?? null };
     },

@@ -6,6 +6,7 @@
 //   3. 전환         암전 → 교체 → 개방 순서와, 암전 중 줌이 멈추는 것
 //   4. 무늬 유지    새로고침해도 UI 색이 바뀌지 않는다
 //   5. 왕복         내려받은 PNG 를 올리면 정확히 제자리로 온다
+//   6. 언어         영어로 바꾸면 어느 표면에도 한글이 남지 않는다
 //
 // 사람이 봐야 하는 것(감각과 흐름)은 여기서 보지 않는다.
 //
@@ -207,42 +208,57 @@ for (const size of ['mobile', 'desktop']) {
   await settled(page);
   await page.waitForTimeout(300);
 
-  /** 구석의 밝기. 고른 것이 있으면 나머지가 어두워진다. */
-  const corner = () =>
+  /**
+   * 화면 구석의 평균 밝기. 고른 것이 있으면 나머지가 어두워진다.
+   *
+   * **카메라가 움직이면 이 값을 견줄 수 없다.** 고르면 카메라가 그 전시물로
+   * 옮겨 가므로 구석에 다른 그림이 온다. 어두운 그림 자리에 밝은 그림이 오면
+   * 어두워졌는데도 값이 커진다. 실제로 그렇게 흔들렸다.
+   * 그래서 픽셀 비교는 **카메라가 멈춘 한 자리에서만** 한다. 카메라가 움직이는
+   * 경로(끌기)는 stage 의 dim 값을 직접 본다.
+   */
+  const cornerLuma = () =>
     page.evaluate(() => {
       const canvas = document.getElementById('stage');
-      const data = canvas
-        .getContext('2d')
-        .getImageData(Math.round(canvas.width * 0.08), Math.round(canvas.height * 0.12), 1, 1).data;
-      return Math.round((data[0] + data[1] + data[2]) / 3);
+      const ctx = canvas.getContext('2d');
+      const w = Math.round(canvas.width * 0.22);
+      const h = Math.round(canvas.height * 0.22);
+      const { data } = ctx.getImageData(0, 0, w, h);
+      let sum = 0;
+      for (let i = 0; i < data.length; i += 4) sum += data[i] + data[i + 1] + data[i + 2];
+      return Math.round(sum / (data.length / 4) / 3);
     });
   const sheetState = () => page.evaluate(() => document.getElementById('sheet').dataset.state);
+  const dimOf = () => page.evaluate(() => window.__museum.focus.dim);
 
-  const plain = await corner();
+  // 고른다. 카메라가 그 전시물로 옮겨 가 멈출 때까지 기다린다.
   await page.mouse.click(500, 420);
-  await page.waitForTimeout(700);
-  const dimmed = await corner();
-  check('고르면 나머지가 어두워진다', dimmed < plain, `${plain} → ${dimmed}`);
+  await page.waitForFunction(() => window.__museum.camera, null, { timeout: 5000 });
+  await page.waitForTimeout(900);
+  const dimmed = await cornerLuma();
   check('고르면 시트가 열린다', (await sheetState()) === 'peek');
+  check('고르면 어둡게 하기가 켜진다', (await dimOf()) === 1);
 
-  // 같은 것을 한 번 더 누르면 놓는다. 고른 것은 가운데로 와 있다.
+  // 같은 것을 한 번 더 누르면 놓는다. 고른 것은 이미 가운데로 와 있다.
+  // 놓을 때 카메라는 움직이지 않는다. 그래서 앞뒤 픽셀을 그대로 견줄 수 있다.
   await page.mouse.click(640, 430);
-  await page.waitForTimeout(700);
-  const released = await corner();
-  check('같은 것을 다시 누르면 놓는다', released > dimmed, `${dimmed} → ${released}`);
+  await page.waitForTimeout(500);
+  const released = await cornerLuma();
+  check('고르면 나머지가 어두워진다', dimmed < released, `어두울 때 ${dimmed} · 놓은 뒤 ${released}`);
+  check('같은 것을 다시 누르면 놓는다', (await dimOf()) === 0);
   check('놓으면 시트가 닫힌다', (await sheetState()) === 'hidden');
 
   // 끌기 시작하면 놓는다
   await page.mouse.click(500, 300);
   await page.waitForTimeout(700);
-  const dimmedAgain = await corner();
+  check('다시 고르면 다시 어두워진다', (await dimOf()) === 1);
   await page.mouse.move(640, 430);
   await page.mouse.down();
   for (let i = 1; i <= 6; i++) await page.mouse.move(640 - i * 10, 430 - i * 4);
-  const duringDrag = await corner();
+  const dimDuringDrag = await dimOf();
   const sheetDuringDrag = await sheetState();
   await page.mouse.up();
-  check('끌기 시작하면 놓는다', duringDrag > dimmedAgain, `${dimmedAgain} → ${duringDrag}`);
+  check('끌기 시작하면 놓는다', dimDuringDrag === 0, `dim ${dimDuringDrag}`);
   check('끌기 시작하면 시트가 닫힌다', sheetDuringDrag === 'hidden');
 
   // 6px 문턱 아래의 흔들림은 탭으로 남는다
@@ -442,6 +458,182 @@ for (const size of ['mobile', 'desktop']) {
   const stillOpen = await page.isVisible('#scrim-search');
   check('읽을 수 없는 입력을 알린다', toasted > 0);
   check('알린 뒤 모달을 닫지 않는다', stillOpen);
+  await page.close();
+}
+
+// ── 6 — 언어를 바꾸면 남는 것이 없다 ─────────────────────────────────────
+//
+// 아이폰에서 "영어로 바꿨는데 모달이 한국어로 남는다" 는 신고가 있었다.
+// 화면에 그려 두고 다시 채우지 않는 자리가 있으면 이렇게 된다.
+// 그래서 한국어로 들어간 뒤 영어로 바꾸고, 모든 표면을 열어 한글을 찾는다.
+
+{
+  const page = await browser.newPage({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+    locale: 'ko-KR', // 한국어로 시작하게 만든다
+  });
+  const errors = [];
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', error => errors.push(String(error)));
+
+  await page.goto(target, { waitUntil: 'commit' });
+  await page.waitForFunction(() => window.__museum, null, { timeout: 20000 });
+  await settled(page);
+  await page.waitForTimeout(300);
+
+  // 페이지 안에 한글 찾기를 심는다. 보이는 것만 본다.
+  await page.addScriptTag({
+    content: `window.__hangul = () => {
+      const found = [];
+      const hangul = /[가-힣]/;
+      const seen = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let node = seen.nextNode(); node; node = seen.nextNode()) {
+        const text = (node.nodeValue || '').trim();
+        if (!text || !hangul.test(text)) continue;
+        const element = node.parentElement;
+        if (!element) continue;
+        // 언어 목록의 자국어 표기는 일부러 그 나라 글자로 둔다
+        if (element.closest('.lang-native')) continue;
+        if (!element.checkVisibility({ checkVisibilityCSS: true })) continue;
+        found.push((element.id ? '#' + element.id : element.tagName.toLowerCase()) + ': ' + text.slice(0, 44));
+      }
+      for (const element of document.querySelectorAll('[aria-label]')) {
+        const value = element.getAttribute('aria-label') || '';
+        if (hangul.test(value)) found.push('aria-label ' + (element.id || element.tagName.toLowerCase()) + ': ' + value.slice(0, 44));
+      }
+      return found;
+    };`,
+  });
+
+  const startedKorean = await page.evaluate(() => ({
+    lang: document.documentElement.lang,
+    hangul: window.__hangul().length,
+  }));
+  check(
+    '한국어 기기는 한국어로 시작한다',
+    startedKorean.lang === 'ko' && startedKorean.hangul > 0,
+    `lang=${startedKorean.lang} · 한글 ${startedKorean.hangul}곳`,
+  );
+
+  // 한국어 상태에서 시트를 열어 둔다. 언어를 바꿀 때 이미 그려진 자리가 있어야
+  // 다시 채우지 않는 버그가 드러난다.
+  await page.mouse.click(195, 400);
+  await page.waitForTimeout(600);
+  await page.click('#sheet-peek');
+  await page.waitForTimeout(400);
+  const koreanTitle = await page.evaluate(() => document.getElementById('plaque-title').textContent);
+  check('한국어 제목이 한글이다', /[가-힣]/.test(koreanTitle), koreanTitle);
+
+  // 영어로 바꾼다
+  await page.click('#btn-language');
+  await page.waitForTimeout(250);
+  await page.click('#lang-list .lang[data-lang="en"]');
+  await page.waitForTimeout(350);
+
+  check(
+    '바꾸면 html lang 이 따라온다',
+    (await page.evaluate(() => document.documentElement.lang)) === 'en',
+  );
+
+  const englishTitle = await page.evaluate(() =>
+    document.getElementById('plaque-title').textContent,
+  );
+  check(
+    '열려 있던 시트의 제목이 영어로 바뀐다',
+    !/[가-힣]/.test(englishTitle) && englishTitle !== koreanTitle,
+    `${koreanTitle} → ${englishTitle}`,
+  );
+
+  /** 표면 하나를 열고 한글이 남았는지 본다. */
+  async function scan(label, before) {
+    if (before) await before();
+    const found = await page.evaluate(() => window.__hangul());
+    check(`영어로 바꾼 뒤 ${label}에 한글이 없다`, found.length === 0, found.join(' / '));
+  }
+
+  await scan('펼친 시트');
+
+  // 펼친 시트는 휴대폰 화면에서 버튼을 덮는다. 접고 놓는다.
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+
+  await scan('찾기 모달', async () => {
+    await page.click('#btn-search');
+    await page.waitForTimeout(300);
+  });
+  await scan('층 모달', async () => {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    await page.click('#btn-floor');
+    await page.waitForTimeout(300);
+  });
+  await scan('언어 모달', async () => {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    await page.click('#btn-language');
+    await page.waitForTimeout(300);
+  });
+  await scan('토스트', async () => {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    // 읽을 수 없는 주소를 넣어 토스트를 띄운다
+    await page.click('#btn-search');
+    await page.waitForTimeout(250);
+    await page.fill('#search-text', 'not an address');
+    await page.click('#btn-go');
+    await page.waitForTimeout(300);
+  });
+  await scan('내려받기 메뉴', async () => {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+    // 시트를 다시 열어야 내려받기 버튼에 닿는다
+    await page.mouse.click(195, 400);
+    await page.waitForTimeout(600);
+    await page.click('#sheet-peek');
+    await page.waitForTimeout(400);
+    await page.click('#btn-download');
+    await page.waitForTimeout(250);
+  });
+
+  // 새로고침 뒤에도 영어다. 저장이 막힌 환경이면 여기서 드러난다.
+  await page.reload({ waitUntil: 'commit' });
+  await page.waitForFunction(() => window.__museum, null, { timeout: 20000 });
+  await settled(page);
+  await page.waitForTimeout(300);
+  await page.addScriptTag({
+    content: `window.__hangul = () => {
+      const found = [];
+      const hangul = /[가-힣]/;
+      const seen = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let node = seen.nextNode(); node; node = seen.nextNode()) {
+        const text = (node.nodeValue || '').trim();
+        if (!text || !hangul.test(text)) continue;
+        const element = node.parentElement;
+        if (!element || element.closest('.lang-native')) continue;
+        if (!element.checkVisibility({ checkVisibilityCSS: true })) continue;
+        found.push((element.id ? '#' + element.id : element.tagName.toLowerCase()) + ': ' + text.slice(0, 44));
+      }
+      return found;
+    };`,
+  });
+  const afterReload = await page.evaluate(() => ({
+    lang: document.documentElement.lang,
+    found: window.__hangul(),
+  }));
+  check(
+    '새로고침해도 영어로 남는다',
+    afterReload.lang === 'en' && afterReload.found.length === 0,
+    `lang=${afterReload.lang} · ${afterReload.found.join(' / ')}`,
+  );
+
+  check('언어 작업에서 콘솔 오류가 없다', errors.length === 0, errors.join(' / '));
   await page.close();
 }
 
