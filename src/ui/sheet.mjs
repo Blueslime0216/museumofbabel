@@ -19,6 +19,18 @@ import { t } from '../i18n/index.mjs';
 
 const DEBUG_HOLD_MS = 700;
 
+/**
+ * PC 배치인지. sheet.css 의 미디어 쿼리와 같은 조건이다.
+ *
+ * 같은 조건을 두 곳에 적는 것이 마음에 걸리지만, 대안은 CSS 변수를 읽어 오는
+ * 것이고 그쪽이 더 돌아가는 길이다. 값이 갈리면 검사가 잡는다.
+ */
+const DESKTOP = '(min-width: 760px) and (pointer: fine)';
+const isDesktop = () => matchMedia(DESKTOP).matches;
+
+/** 손잡이를 이보다 덜 움직였으면 끌기가 아니라 누른 것이다. input.mjs 와 같은 값. */
+const GRIP_SLOP = 6;
+
 export function createSheet({ toast, onShow }) {
   const $ = id => document.getElementById(id);
 
@@ -45,8 +57,19 @@ export function createSheet({ toast, onShow }) {
     sheet.setAttribute('aria-hidden', next === 'hidden' ? 'true' : 'false');
     // 접혀 있을 때 본문은 화면 밖이다. 읽어 줄 이유가 없다.
     body.setAttribute('aria-hidden', next === 'expanded' ? 'false' : 'true');
+    grip.setAttribute('aria-expanded', next === 'expanded' ? 'true' : 'false');
     if (next !== 'expanded') closeMenu();
   }
+
+  /**
+   * 무엇을 고르면 어느 상태로 열리는가.
+   *
+   * 휴대폰은 제목 줄만(peek). 시트가 화면의 88%를 덮으므로 곧바로 펼치면
+   * 미술관이 가려진다.
+   * PC 는 펼침(expanded). 우하단 패널이라 아무것도 가리지 않는데 제목 한 줄만
+   * 보여 주면 한 번 더 누르게 만드는 것 말고는 하는 일이 없다.
+   */
+  const restingState = () => (isDesktop() ? 'expanded' : 'peek');
 
   function close() {
     setState('hidden');
@@ -92,7 +115,7 @@ export function createSheet({ toast, onShow }) {
       }),
     );
 
-    if (state === 'hidden') setState('peek');
+    if (state === 'hidden') setState(restingState());
     onShow?.(info);
   }
 
@@ -105,6 +128,9 @@ export function createSheet({ toast, onShow }) {
 
   const currentY = () => new DOMMatrixReadOnly(getComputedStyle(sheet).transform).m42;
   let drag = null;
+
+  /** 끌고 나면 브라우저가 click 도 보낸다. 그 한 번은 무시한다. */
+  let swallowClick = false;
 
   grip.addEventListener('pointerdown', event => {
     grip.setPointerCapture(event.pointerId);
@@ -130,6 +156,15 @@ export function createSheet({ toast, onShow }) {
     if (!drag || drag.id !== event.pointerId) return;
     const { moved, wasExpanded } = drag;
     drag = null;
+
+    // 거의 움직이지 않았으면 끌기가 아니다. click 이 뒤따라 오므로 거기서 처리한다.
+    if (Math.abs(moved) < GRIP_SLOP) {
+      sheet.dataset.dragging = '0';
+      sheet.style.removeProperty('--sheet-y');
+      return;
+    }
+
+    swallowClick = true;
     if (wasExpanded) setState(moved > 70 ? 'peek' : 'expanded');
     else if (moved < -40) setState('expanded');
     else if (moved > 60) close();
@@ -137,6 +172,16 @@ export function createSheet({ toast, onShow }) {
   };
   grip.addEventListener('pointerup', endDrag);
   grip.addEventListener('pointercancel', endDrag);
+
+  // 손잡이를 누르면 접기와 펼치기를 오간다. 마우스로는 끄는 것보다 이것이 쉽다.
+  // button 이므로 Enter · Space 로도 같은 일이 일어난다.
+  grip.addEventListener('click', () => {
+    if (swallowClick) {
+      swallowClick = false;
+      return;
+    }
+    setState(state === 'expanded' ? 'peek' : 'expanded');
+  });
 
   peek.addEventListener('click', () => setState('expanded'));
 
@@ -230,7 +275,15 @@ export function createSheet({ toast, onShow }) {
     show,
     close,
     refresh,
+    /**
+     * 화면에 손을 대면 접는다.
+     *
+     * **PC 에서는 접지 않는다.** 패널이 우하단에 떠 있어 가리는 것이 없으므로
+     * 접을 이유가 없고, 접으면 PC 의 기본 상태(펼침)와 싸운다. 전시물을 하나
+     * 고르고 다음 것을 고를 때마다 반쯤 닫혔다 열리는 꼴이 된다.
+     */
     collapse() {
+      if (isDesktop()) return;
       if (state === 'expanded') setState('peek');
     },
     get state() {

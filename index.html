@@ -118,7 +118,20 @@
         aria-label="Artwork details"
         aria-hidden="true"
       >
-        <div class="sheet-grip" id="sheet-grip"><span class="grip-bar"></span></div>
+        <!-- 손잡이. 끌어서 옮기고, 눌러서 접고 펼친다.
+             div 이 아니라 button 인 이유. 누를 수 있는 것이므로 키보드로도
+             닿아야 하고 스크린 리더가 역할을 읽어야 한다. -->
+        <button
+          type="button"
+          class="sheet-grip"
+          id="sheet-grip"
+          aria-controls="sheet-body"
+          aria-expanded="false"
+          data-i18n-label="sheet.toggle"
+          aria-label="Collapse or expand the details"
+        >
+          <span class="grip-bar"></span>
+        </button>
 
         <button class="sheet-peek" id="sheet-peek">
           <span class="peek-title" id="peek-title">—</span>

@@ -98,16 +98,32 @@ for (const size of ['mobile', 'desktop']) {
   check(`${size}: 암전 중 줌이 멈춘다`, Math.abs(zoomA - zoomB) < 0.01, `${zoomA} → ${zoomB}`);
   await traveled(page);
 
-  // 시트 기하 — peek
+  // 고르면 어느 상태로 열리는가. 휴대폰은 제목 줄만, PC 는 펼침.
   const cx = size === 'mobile' ? 195 : 500;
   const cy = size === 'mobile' ? 400 : 420;
+  const opensTo = size === 'mobile' ? 'peek' : 'expanded';
+
   await page.mouse.click(cx, cy);
   await page.waitForFunction(
-    () => document.getElementById('sheet').dataset.state === 'peek',
+    () => document.getElementById('sheet').dataset.state !== 'hidden',
     null,
     { timeout: 5000 },
   );
   await page.waitForTimeout(450);
+  check(
+    `${size}: 고르면 ${opensTo === 'peek' ? '제목 줄만 보인다' : '곧바로 펼쳐진다'}`,
+    (await page.evaluate(() => document.getElementById('sheet').dataset.state)) === opensTo,
+  );
+
+  // 시트 기하 — peek. PC 는 펼쳐진 채로 열리므로 손잡이를 눌러 접는다.
+  if (size !== 'mobile') {
+    await page.click('#sheet-grip');
+    await page.waitForTimeout(450);
+    check(
+      `${size}: 손잡이를 누르면 접힌다`,
+      (await page.evaluate(() => document.getElementById('sheet').dataset.state)) === 'peek',
+    );
+  }
 
   const peek = await page.evaluate(() => {
     const sheet = document.getElementById('sheet');
@@ -142,9 +158,16 @@ for (const size of ['mobile', 'desktop']) {
   check(`${size}: peek 에서 본문이 감춰진다`, peek.bodyVisible === 'hidden');
   check(`${size}: peek 에 제목이 있다`, peek.title.length > 2 && peek.title !== '—', peek.title);
 
-  // 시트 기하 — expanded
-  await page.click('#sheet-peek');
+  // 시트 기하 — expanded. 다시 펼친다.
+  // 휴대폰은 제목 줄을 누르고, PC 는 손잡이를 누른다 (같은 것을 다시 누르는 셈).
+  await page.click(size === 'mobile' ? '#sheet-peek' : '#sheet-grip');
   await page.waitForTimeout(500);
+  if (size !== 'mobile') {
+    check(
+      `${size}: 손잡이를 다시 누르면 펼쳐진다`,
+      (await page.evaluate(() => document.getElementById('sheet').dataset.state)) === 'expanded',
+    );
+  }
   const expanded = await page.evaluate(() => {
     const sheet = document.getElementById('sheet');
     const body = document.getElementById('sheet-body');
@@ -335,7 +358,8 @@ for (const size of ['mobile', 'desktop']) {
   await page.waitForTimeout(900);
   const dimmed = await cornerLuma();
   const shadowOn = await shadowProbe();
-  check('고르면 시트가 열린다', (await sheetState()) === 'peek');
+  // PC 라서 펼쳐진 채로 열린다
+  check('고르면 시트가 열린다', (await sheetState()) === 'expanded');
   check('고르면 어둡게 하기가 켜진다', (await focusOf()).dimTarget === 1);
 
   // ── 커지는 애니메이션 ─────────────────────────────────────────────────
@@ -679,10 +703,9 @@ for (const size of ['mobile', 'desktop']) {
 
   // 도장이 없는 파일을 얻는다. Alt+Shift+클릭이 디버그 내려받기다.
   // 도장이 있으면 청크를 읽고 곧바로 가 버려서 투영을 타지 않는다.
+  // PC 는 고르면 곧바로 펼쳐진다. 제목 줄을 누를 필요가 없다.
   await page.mouse.click(500, 420);
-  await page.waitForTimeout(700);
-  await page.click('#sheet-peek');
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(800);
 
   const download = page.waitForEvent('download');
   await page.click('#btn-download', { modifiers: ['Alt', 'Shift'] });

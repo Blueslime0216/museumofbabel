@@ -20,6 +20,7 @@ export default {
   "floor.note": "Each floor is a different grain. You arrive somewhere new.",
 
   "sheet.label": "Artwork details",
+  "sheet.toggle": "Collapse or expand the details",
   "sheet.copy": "Copy address",
   "sheet.download": "Download",
   "sheet.original": "Original",

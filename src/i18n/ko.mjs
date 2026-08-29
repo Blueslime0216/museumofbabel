@@ -20,6 +20,7 @@ export default {
   "floor.note": "층마다 그림의 결이 다릅니다. 옮기면 새 자리에서 시작합니다.",
 
   "sheet.label": "작품 정보",
+  "sheet.toggle": "정보 접기 · 펼치기",
   "sheet.copy": "주소 복사",
   "sheet.download": "내려받기",
   "sheet.original": "원본",

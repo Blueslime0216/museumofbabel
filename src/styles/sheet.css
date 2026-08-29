@@ -37,11 +37,19 @@
   transition: none;
 }
 
+/* button 이므로 브라우저 기본값을 지운다. 생김새는 바뀌지 않는다. */
 .sheet-grip {
   flex: none;
   display: grid;
   place-items: center;
+  width: 100%;
   height: 26px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
   cursor: grab;
   touch-action: none;
 }
