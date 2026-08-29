@@ -229,36 +229,149 @@ for (const size of ['mobile', 'desktop']) {
       return Math.round(sum / (data.length / 4) / 3);
     });
   const sheetState = () => page.evaluate(() => document.getElementById('sheet').dataset.state);
-  const dimOf = () => page.evaluate(() => window.__museum.focus.dim);
+  const focusOf = () => page.evaluate(() => window.__museum.focus);
+
+  /**
+   * 고른 전시물이 **평소 크기 바깥으로 삐져나온 만큼**을 센다.
+   *
+   * 평소 그림의 반지름은 zoom×0.94/2 다. 그 바로 바깥에 줄을 하나 긋고 밝은
+   * 픽셀을 센다. 커지지 않았다면 그 줄은 전시물 사이의 벽이라 어둡다.
+   *
+   * 네 변을 다 재서 가장 큰 값을 쓴다. 그림의 한쪽 끝이 우연히 어두울 수 있지만
+   * 네 변이 전부 어두울 일은 없다. 밝기에 기대는 단정을 이렇게 묶는다.
+   */
+  const edgeBleed = () =>
+    page.evaluate(() => {
+      const canvas = document.getElementById('stage');
+      const ctx = canvas.getContext('2d');
+      const dpr = canvas.width / canvas.getBoundingClientRect().width;
+      const zoom = window.__museum.camera.zoom * dpr;
+      const { data, width } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+
+      const at = (zoom * 0.94) / 2 + zoom * 0.006; // 평소 테두리 바로 바깥
+      const half = Math.round((zoom * 0.94) / 2) - 3;
+      const lit = (x, y) => {
+        const i = (Math.round(y) * width + Math.round(x)) * 4;
+        return data[i] + data[i + 1] + data[i + 2] > 120;
+      };
+
+      let best = 0;
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        let count = 0;
+        for (let t = -half; t <= half; t += 2) {
+          const x = cx + dx * at + (dx ? 0 : t);
+          const y = cy + dy * at + (dy ? 0 : t);
+          if (lit(x, y)) count++;
+        }
+        best = Math.max(best, count);
+      }
+      return best;
+    });
+
+  // 프레임마다 크기를 적어 둔다. 애니메이션이 몇 프레임에 걸쳐 있는지 본다.
+  const startTrace = () =>
+    page.evaluate(() => {
+      window.__trace = [];
+      const tick = () => {
+        const f = window.__museum.focus;
+        window.__trace.push([f.lift, f.lifting]);
+        if (window.__trace.length < 150) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
 
   // 고른다. 카메라가 그 전시물로 옮겨 가 멈출 때까지 기다린다.
+  await startTrace();
   await page.mouse.click(500, 420);
-  await page.waitForFunction(() => window.__museum.camera, null, { timeout: 5000 });
   await page.waitForTimeout(900);
   const dimmed = await cornerLuma();
   check('고르면 시트가 열린다', (await sheetState()) === 'peek');
-  check('고르면 어둡게 하기가 켜진다', (await dimOf()) === 1);
+  check('고르면 어둡게 하기가 켜진다', (await focusOf()).dimTarget === 1);
+
+  // ── 커지는 애니메이션 ─────────────────────────────────────────────────
+  {
+    const trace = (await page.evaluate(() => window.__trace)).map(([lift]) => lift);
+    const grown = await focusOf();
+    const between = trace.filter(v => v > 0.05 && v < 0.95).length;
+    let biggestStep = 0;
+    let backwards = 0;
+    for (let i = 1; i < trace.length; i++) {
+      biggestStep = Math.max(biggestStep, trace[i] - trace[i - 1]);
+      if (trace[i] < trace[i - 1] - 1e-9) backwards++;
+    }
+
+    check('고른 것이 끝까지 커진다', grown.lift === 1, `크기 ${grown.lift}`);
+    check(
+      '커지는 동안 중간 크기를 지난다',
+      between >= 4,
+      `중간값 ${between}프레임 · 한 프레임 최대 ${biggestStep.toFixed(3)}`,
+    );
+    check('커지는 도중에 되돌아가지 않는다', backwards === 0, `${backwards}회`);
+    check('커진 만큼이 화면에 나온다', (await edgeBleed()) > 8, `삐져나온 픽셀 ${await edgeBleed()}개`);
+  }
+
+  // ── 옮길 때 둘이 함께 움직인다 ────────────────────────────────────────
+  {
+    await startTrace();
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(700);
+    const trace = await page.evaluate(() => window.__trace);
+    const both = trace.filter(([, lifting]) => lifting === 2).length;
+    const after = await focusOf();
+
+    check(
+      '옮기면 떠난 칸과 새 칸이 함께 움직인다',
+      both >= 4,
+      `두 칸이 함께 움직인 프레임 ${both}개`,
+    );
+    check('옮긴 뒤에는 한 칸만 남는다', after.lifting === 1 && after.lift === 1);
+  }
+
+  if (shots) await page.screenshot({ path: '! - dev/shots/check-focus.png' });
+
+  // 다시 원래 칸으로 돌아온다. 아래 픽셀 비교가 같은 자리에서 이루어져야 한다.
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(700);
 
   // 같은 것을 한 번 더 누르면 놓는다. 고른 것은 이미 가운데로 와 있다.
   // 놓을 때 카메라는 움직이지 않는다. 그래서 앞뒤 픽셀을 그대로 견줄 수 있다.
   await page.mouse.click(640, 430);
   await page.waitForTimeout(500);
   const released = await cornerLuma();
+  const afterRelease = await focusOf();
   check('고르면 나머지가 어두워진다', dimmed < released, `어두울 때 ${dimmed} · 놓은 뒤 ${released}`);
-  check('같은 것을 다시 누르면 놓는다', (await dimOf()) === 0);
+  check(
+    '같은 것을 다시 누르면 놓는다',
+    afterRelease.cell === null && afterRelease.dimTarget === 0,
+  );
+  check('놓으면 커진 것도 되돌아간다', afterRelease.lift === 0, `크기 ${afterRelease.lift}`);
   check('놓으면 시트가 닫힌다', (await sheetState()) === 'hidden');
 
-  // 끌기 시작하면 놓는다
+  // 끌기 시작하면 놓는다.
+  //
+  // 여기서는 dim 의 **목표값**을 본다. 애니메이션이 붙었으므로 지금 값은
+  // 아직 줄어드는 중이다. "놓았는가" 는 목표값과 고른 칸이 답한다.
   await page.mouse.click(500, 300);
   await page.waitForTimeout(700);
-  check('다시 고르면 다시 어두워진다', (await dimOf()) === 1);
+  check('다시 고르면 다시 어두워진다', (await focusOf()).dimTarget === 1);
   await page.mouse.move(640, 430);
   await page.mouse.down();
   for (let i = 1; i <= 6; i++) await page.mouse.move(640 - i * 10, 430 - i * 4);
-  const dimDuringDrag = await dimOf();
+  const duringDrag = await focusOf();
   const sheetDuringDrag = await sheetState();
   await page.mouse.up();
-  check('끌기 시작하면 놓는다', dimDuringDrag === 0, `dim ${dimDuringDrag}`);
+  check(
+    '끌기 시작하면 놓는다',
+    duringDrag.cell === null && duringDrag.dimTarget === 0,
+    `고른 칸 ${JSON.stringify(duringDrag.cell)} · dim 목표 ${duringDrag.dimTarget}`,
+  );
   check('끌기 시작하면 시트가 닫힌다', sheetDuringDrag === 'hidden');
 
   // 6px 문턱 아래의 흔들림은 탭으로 남는다
@@ -458,6 +571,76 @@ for (const size of ['mobile', 'desktop']) {
   const stillOpen = await page.isVisible('#scrim-search');
   check('읽을 수 없는 입력을 알린다', toasted > 0);
   check('알린 뒤 모달을 닫지 않는다', stillOpen);
+  await page.close();
+}
+
+// ── 5.2 — 올린 그림을 층마다 다시 찾는다 ─────────────────────────────────
+//
+// 층을 바꾸면 다시 올리게 하지 않는다. 같은 그림이 층마다 어디에 있는지
+// 견주는 것이 이 미술관에서 가장 재미있는 조작이기 때문이다.
+
+{
+  const page = await openPage('desktop');
+  await settled(page);
+
+  // 도장이 없는 파일을 얻는다. Alt+Shift+클릭이 디버그 내려받기다.
+  // 도장이 있으면 청크를 읽고 곧바로 가 버려서 투영을 타지 않는다.
+  await page.mouse.click(500, 420);
+  await page.waitForTimeout(700);
+  await page.click('#sheet-peek');
+  await page.waitForTimeout(400);
+
+  const download = page.waitForEvent('download');
+  await page.click('#btn-download', { modifiers: ['Alt', 'Shift'] });
+  const file = await download;
+  const plain = join(temp, 'unstamped.png');
+  await file.saveAs(plain);
+
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+
+  // 지금 층(2층)에서 투영한다
+  await page.click('#btn-search');
+  await page.waitForTimeout(250);
+  await page.setInputFiles('#search-file', plain);
+  await page.waitForSelector('#compare:not([hidden])', { timeout: 45000 });
+  check('도장 없는 그림은 투영으로 찾는다', await page.isVisible('#compare'));
+
+  // 층을 1층으로 바꾼다. 다시 올리지 않는다.
+  //
+  // "앞 결과를 지웠다가 다시 보여 준다" 를 시간을 재서 확인하면 안 된다.
+  // 1층 투영은 빨라서 잠깐 뒤에 보면 이미 새 결과가 떠 있다. 대신 속성이
+  // 바뀐 순서를 기록한다. 빠르든 느리든 순서는 같다.
+  await page.evaluate(() => {
+    window.__compareLog = [];
+    const target = document.getElementById('compare');
+    new MutationObserver(() => window.__compareLog.push(target.hidden)).observe(target, {
+      attributes: true,
+      attributeFilter: ['hidden'],
+    });
+  });
+
+  await page.click('#search-floor-row .segment[data-tier="4"]');
+  await page.waitForSelector('#compare:not([hidden])', { timeout: 45000 });
+  const compareLog = await page.evaluate(() => window.__compareLog);
+
+  check(
+    '층을 바꾸면 앞 결과를 지운 뒤 새로 찾는다',
+    compareLog[0] === true && compareLog.at(-1) === false,
+    `숨김 여부가 ${JSON.stringify(compareLog)} 순으로 바뀌었다`,
+  );
+  check('다시 올리지 않아도 새 층에서 다시 찾는다', await page.isVisible('#compare'));
+
+  await page.click('#btn-go');
+  await traveled(page);
+  check(
+    '그 결과가 바꾼 층의 자리다',
+    (await page.evaluate(() => window.__museum.state.tier)) === 4,
+    `tier ${await page.evaluate(() => window.__museum.state.tier)}`,
+  );
+
+  check('층을 바꿔 찾는 동안 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
   await page.close();
 }
 
