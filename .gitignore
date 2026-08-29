@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.vite/
+
+# 시안 · 점검용 스크린샷. 저장소에 넣지 않는다.
+# "!" 로 시작하는 줄은 부정 패턴이므로 escape 해야 한다.
+\! - dev/shots/

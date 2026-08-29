@@ -1,0 +1,63 @@
+/* 전시장 — 캔버스 · 비네트 · 커튼 */
+
+/* 층 순서를 못 박는다. 커튼이 UI 위를 덮어야 암전이 성립한다.
+ *   0  캔버스   1  비네트   10  UI   50  커튼   60  토스트
+ * 토스트가 커튼 위인 것은 의도다. 암전 중에도 알림은 보여야 한다.
+ */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100dvh;
+  display: block;
+  /* 브라우저의 페이지 줌과 스크롤이 새지 않게 한다. 핀치는 우리가 처리한다. */
+  touch-action: none;
+  cursor: grab;
+}
+.stage:active {
+  cursor: grabbing;
+}
+
+/* 상시 비네트. 전시장 조명의 느낌이며 개방의 끝점을 자연스럽게 만든다. */
+.vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 86% 72% at 50% 50%,
+    rgba(6, 5, 4, 0) 40%,
+    rgba(6, 5, 4, 0.42) 100%
+  );
+}
+
+/* 커튼 — 요구사항 6장
+ *
+ * 두 모드를 한 요소로 처리한다.
+ *   암전  균일한 검정. opacity 0 → 1. 줌은 변하지 않는다
+ *   개방  opacity 1 고정. 가운데가 투명한 원이 커진다
+ *
+ * 값은 카메라 루프가 매 프레임 갱신한다. 커스텀 프로퍼티 애니메이션에
+ * 의존하지 않는다.
+ */
+.curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  background: #000;
+  opacity: 0;
+}
+.curtain[data-mode='dim'] {
+  background: #000;
+}
+.curtain[data-mode='open'] {
+  opacity: 1;
+  background: radial-gradient(
+    circle at 50% 50%,
+    transparent var(--open-inner, 0%),
+    #000 var(--open-outer, 0%)
+  );
+}

@@ -1,0 +1,18 @@
+{
+  "note": "자동 생성 파일. tools/sync-codec.mjs 가 관리한다. 직접 편집하지 마라.",
+  "source": "005 - 최종 알고리즘 테스트/01_혼합진법 주소/src",
+  "files": {
+    "app.mjs": "bf5965bfe421980f95ec3611bde9ee4bc2bef4dd90ecb424dec3096ecc33d55a",
+    "basis.mjs": "369337d73abf34b5afdd6e8e92e8394c15b8b7496285026a27248707f6a16869",
+    "codec.mjs": "35f20f577510669087e3a65a18c537e48fd337bb1c0242f164785b8797e6e512",
+    "export.mjs": "df06b8cc15d80114018303fca1ca598621e298859f141d749f0d4243f66b2df0",
+    "gallery.mjs": "c0bdaa0fd0b0ea416c176c7de4dcca8287ecfc99266a7398a908f8fb3787078e",
+    "project.mjs": "1b35e1b5fe4778882b55a41a8478c81488019c5b4357fcd3895773a4e789ebbf",
+    "radix.mjs": "7e367dd0270a664d4d412716a2d6a4e87c6f138c446da309120545de591284a0",
+    "render.mjs": "0e73dcf24e8a68465f972ed13ee0964420e2beeb2f1165a5434eec7ff12d9151",
+    "scramble.mjs": "e3885081b434bc32388908e6646d99d737526c70ced5018d9a70cc7c562ca41b",
+    "space.mjs": "1f043ec6bda7ff6eeb1d38e20ca346dbfda319a5fd3f9f856d848c052e99605a",
+    "spec.mjs": "2a08f45d6e948aae91a7a6506407efb1850bbc5bf1a2da573cf94fdfe180c716",
+    "url.mjs": "cd835aa4d354980796188511461b8b6ee8b2dbc2b8aea27bb9b9339430a49dd5"
+  }
+}

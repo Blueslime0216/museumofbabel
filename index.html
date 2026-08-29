@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1"
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Every possible picture already hangs here. You only need the address."
+    />
+    <title>Museum of Babel</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./src/styles/base.css" />
+    <link rel="stylesheet" href="./src/styles/stage.css" />
+    <link rel="stylesheet" href="./src/styles/surface.css" />
+    <link rel="stylesheet" href="./src/styles/sheet.css" />
+    <link rel="stylesheet" href="./src/styles/modal.css" />
+  </head>
+  <body>
+    <!-- 아래 층: 전시물 격자 -->
+    <canvas
+      id="stage"
+      class="stage"
+      role="application"
+      aria-label="Museum floor. Drag to move, pinch or scroll to zoom, tap an artwork to inspect it. Arrow keys move to the next artwork."
+    ></canvas>
+
+    <!-- 상시 비네트. 전시장 조명의 느낌이며 개방의 끝점을 자연스럽게 만든다. -->
+    <div class="vignette" aria-hidden="true"></div>
+
+    <!-- 위 층: UI. 실제 컨트롤 자리만 입력을 받는다. -->
+    <div class="overlay">
+      <button class="ui pill pill-language" id="btn-language" aria-label="Language">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18M12 3c2.6 2.4 2.6 15.6 0 18M12 3c-2.6 2.4-2.6 15.6 0 18" />
+        </svg>
+      </button>
+
+      <div class="ui controls" id="controls">
+        <button class="pill" id="btn-search" aria-label="Find an artwork">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <path d="M15.5 15.5L21 21" />
+          </svg>
+        </button>
+        <button class="pill" id="btn-random" aria-label="Go somewhere else">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3.5" y="3.5" width="17" height="17" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
+            <circle cx="15.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
+            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+            <circle cx="8.5" cy="15.5" r="1.5" fill="currentColor" stroke="none" />
+            <circle cx="15.5" cy="15.5" r="1.5" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+      </div>
+
+      <p class="hint" id="hint" aria-hidden="true">drag to explore</p>
+
+      <!-- 시트 (휴대폰) / 플로팅 패널 (PC). 한 코드, 배치만 갈린다. -->
+      <section
+        class="ui sheet"
+        id="sheet"
+        data-state="hidden"
+        aria-label="Artwork details"
+        aria-hidden="true"
+      >
+        <div class="sheet-grip" id="sheet-grip"><span class="grip-bar"></span></div>
+
+        <button class="sheet-peek" id="sheet-peek">
+          <span class="peek-title" id="peek-title">—</span>
+          <span class="peek-acc" id="peek-acc">—</span>
+        </button>
+
+        <div class="sheet-body" id="sheet-body" aria-hidden="true">
+          <div class="plate">
+            <canvas id="detail" width="256" height="256" role="img" aria-label="Artwork"></canvas>
+          </div>
+
+          <div class="actions">
+            <button class="btn" id="btn-copy">Copy address</button>
+            <div class="menu-wrap">
+              <button class="btn btn-primary" id="btn-download" aria-expanded="false">
+                Download
+                <svg class="caret" viewBox="0 0 12 12" aria-hidden="true">
+                  <path d="M2.5 4.5L6 8l3.5-3.5" />
+                </svg>
+              </button>
+              <div class="menu" id="download-menu" hidden>
+                <button class="menu-item" data-size="256">
+                  <span>Original</span><span class="menu-note">256 px</span>
+                </button>
+                <button class="menu-item" data-size="1024">
+                  <span>Large</span><span class="menu-note">1024 px</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="plaque">
+            <h2 class="plaque-title" id="plaque-title">—</h2>
+            <hr />
+            <p>Anonymous, undated</p>
+            <p id="plaque-medium">—</p>
+            <p id="plaque-acc">—</p>
+            <p class="plaque-owner">Museum of Babel, permanent collection</p>
+          </div>
+
+          <section class="field">
+            <h3>Address <span class="note">tap to expand</span></h3>
+            <p class="mono address panel" id="address" data-open="0">—</p>
+          </section>
+
+          <section class="field">
+            <h3>Record</h3>
+            <dl class="record panel" id="record"></dl>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <!-- 커튼: 암전 → 교체 → 원형 개방 -->
+    <div id="curtain" class="curtain" aria-hidden="true"></div>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+
+    <noscript>
+      <p class="noscript">
+        This museum is drawn in your browser from the address alone. It needs JavaScript.
+      </p>
+    </noscript>
+
+    <script type="module" src="./src/main.mjs"></script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+# 줄바꿈을 저장소에서 LF 로 고정한다.
+# 코덱 복사본은 해시로 원본과 대조하므로 줄바꿈이 바뀌면 검사가 실패한다.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.avif binary

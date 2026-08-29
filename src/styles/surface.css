@@ -1,0 +1,224 @@
+/* 무늬 표면과 글자 — 요구사항 10장
+ *
+ * theme.mjs 가 표면마다 --bg-<name> · --on-<name> · --edge-<name> 을 심는다.
+ * 이 파일은 그것을 어디에 어떻게 바르는지만 정한다.
+ *
+ * 크기 방침
+ *   큰 면    background-size: cover.  한 장을 통째로 늘린다. 반복이 원리적으로 없다
+ *   작은 면  요소보다 큰 고정 크기.   한 타일의 일부만 보이므로 반복이 안 보인다
+ *
+ * 가독성 방침 (목업에서 얻은 결론)
+ *   큰 글자   -webkit-text-stroke + paint-order. 네 방향 그림자보다 깔끔하다
+ *   긴 본문   테두리를 두르지 않고 반투명 판 위에 올린다
+ */
+
+.surface,
+.pill,
+.sheet,
+.sheet-peek,
+.plate,
+.btn,
+.menu,
+.modal,
+.toast,
+.input-row input,
+.dropzone {
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+  background-position: center center;
+  border-radius: 0;
+}
+
+/* 떠 있는 버튼만 원형을 지킨다. 눌리는 곳이라 손가락이 알아야 한다. */
+.pill {
+  border-radius: 50%;
+}
+
+/* ── 큰 면: 한 장을 통째로 늘린다 ────────────────────────────────────── */
+
+.sheet {
+  background-image: var(--bg-sheet);
+  background-size: cover;
+  color: var(--on-sheet);
+}
+.plate {
+  background-image: var(--bg-plate);
+  background-size: cover;
+}
+.modal {
+  background-image: var(--bg-modal);
+  background-size: cover;
+  color: var(--on-modal);
+}
+.dropzone {
+  background-image: var(--bg-field);
+  background-size: cover;
+  color: var(--on-field);
+}
+
+/* ── 작은 면: 요소보다 큰 고정 크기 ──────────────────────────────────── */
+
+.pill {
+  background-image: var(--bg-pill);
+  background-size: 240px 240px;
+  color: var(--on-pill);
+}
+.sheet-peek {
+  background-image: var(--bg-peek);
+  background-size: 420px 420px;
+  color: var(--on-peek);
+}
+.btn {
+  background-image: var(--bg-btn);
+  background-size: 360px 360px;
+  color: var(--on-btn);
+}
+.btn-primary {
+  background-image: var(--bg-btn-primary);
+  color: var(--on-btn-primary);
+}
+.menu {
+  background-image: var(--bg-menu);
+  background-size: 340px 340px;
+  color: var(--on-menu);
+}
+.toast {
+  background-image: var(--bg-toast);
+  background-size: 300px 300px;
+  color: var(--on-toast);
+}
+.input-row input {
+  background-image: var(--bg-field);
+  background-size: 420px 420px;
+  color: var(--on-field);
+}
+
+/* ── 글자 ────────────────────────────────────────────────────────────── */
+
+/* 큰 글자. 획을 균일하게 둘러 무늬 위에서도 모양이 끊기지 않는다.
+ *
+ * 획 두께는 글자 크기에 비례해야 한다. `paint-order: stroke fill` 은 획을
+ * 윤곽선 중앙에 그리므로 절반이 글자 속으로 파고든다. 21px 세리프에 4px 을
+ * 두르면 획이 글자 줄기를 다 먹어서 흰 글자처럼 보인다. 실제로 그렇게 나왔다.
+ *
+ * 대략 글자 크기의 0.12배, 작은 글자는 1.5px 을 넘기지 않는다.
+ */
+.stroked {
+  paint-order: stroke fill;
+  -webkit-text-stroke: 2px var(--stroke, #000);
+}
+
+.peek-title {
+  --stroke: var(--edge-peek);
+  color: var(--on-peek);
+  paint-order: stroke fill;
+  -webkit-text-stroke: 2px var(--stroke); /* 17px */
+}
+.peek-acc {
+  --stroke: var(--edge-peek);
+  color: var(--on-peek);
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.5px var(--stroke); /* 11px */
+}
+.plaque-title {
+  --stroke: var(--edge-sheet);
+  color: var(--on-sheet);
+  paint-order: stroke fill;
+  -webkit-text-stroke: 2.5px var(--stroke); /* 21px */
+}
+.plaque p {
+  --stroke: var(--edge-sheet);
+  color: var(--on-sheet);
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.5px var(--stroke); /* 12.5px */
+}
+.btn,
+.menu-item,
+.modal-title {
+  paint-order: stroke fill;
+  -webkit-text-stroke: 2px var(--stroke, #000); /* 14px */
+}
+.field h3 {
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.5px var(--stroke, #000); /* 10.5px */
+}
+.btn {
+  --stroke: var(--edge-btn);
+}
+.btn-primary {
+  --stroke: var(--edge-btn-primary);
+}
+.menu-item {
+  --stroke: var(--edge-menu);
+  color: var(--on-menu);
+}
+.field h3 {
+  --stroke: var(--edge-sheet);
+  color: var(--on-sheet);
+}
+.toast {
+  --stroke: var(--edge-toast);
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.8px var(--stroke); /* 13px */
+}
+
+/**
+ * 긴 본문은 테두리를 두르지 않는다.
+ *
+ * 주소와 기록표에 획을 두르면 전시 도록보다 게임 화면에 가까워진다.
+ * 대신 글자색의 반대쪽 반투명 판을 깔아 무늬를 눌러 둔다. 무늬는 판 주위에 남는다.
+ */
+.panel {
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--edge-sheet) 82%, transparent);
+  color: var(--on-sheet);
+  -webkit-text-stroke: 0;
+}
+
+/* ── 선 ──────────────────────────────────────────────────────────────── */
+
+.sheet {
+  border-top: 3px solid var(--on-sheet);
+}
+.pill {
+  border: 2px solid var(--on-pill);
+}
+.btn {
+  border: 3px solid var(--on-btn);
+}
+.btn-primary {
+  border-color: var(--on-btn-primary);
+}
+.menu {
+  border: 3px solid var(--on-menu);
+}
+.menu-item + .menu-item {
+  border-top: 2px solid var(--on-menu);
+}
+.plate {
+  border: 3px solid var(--on-plate);
+}
+/* 작품이 무늬에 묻히지 않게 테두리를 세운다. 이것이 없으면 작품을 못 찾는다. */
+.plate canvas {
+  outline: 3px solid var(--on-plate);
+}
+.toast {
+  border: 3px solid var(--on-toast);
+}
+.field {
+  border-top: 2px solid var(--on-sheet);
+}
+.plaque hr {
+  border-top: 3px solid var(--on-sheet);
+}
+.grip-bar {
+  background: var(--on-sheet);
+  outline: 2px solid var(--edge-sheet);
+}
+
+/* 누를 때는 색을 뒤집는다. 무늬 위에서 가장 확실한 반응이다. */
+.pill:active,
+.btn:active,
+.menu-item:active {
+  filter: invert(1);
+}

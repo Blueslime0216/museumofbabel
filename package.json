@@ -1,0 +1,18 @@
+{
+  "name": "museum-of-babel",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Museum of Babel — every possible picture already hangs here.",
+  "scripts": {
+    "dev": "node tools/sync-codec.mjs && vite",
+    "build": "node tools/sync-codec.mjs --verify && vite build",
+    "preview": "vite preview",
+    "sync-codec": "node tools/sync-codec.mjs",
+    "test": "node --test test/camera.test.mjs test/curtain.test.mjs test/png.test.mjs test/label.test.mjs test/theme.test.mjs",
+    "check": "npm run test && node tools/sync-codec.mjs --verify"
+  },
+  "devDependencies": {
+    "vite": "8.2.2"
+  }
+}

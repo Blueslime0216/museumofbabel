@@ -1,0 +1,94 @@
+/* 변수 · 초기화 · 글꼴
+ *
+ * 요구사항 10장. 화면에서 색을 가진 것은 전시물과 UI 무늬뿐이다.
+ * 벽은 칠하지 않는다.
+ */
+
+:root {
+  --wall: #12100e;
+  --ink: #efe9dd;
+  --ink-dim: #b8b0a3;
+  --ink-faint: #8b8377;
+  --line: rgba(239, 233, 221, 0.13);
+  --line-strong: rgba(239, 233, 221, 0.26);
+
+  --serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  --pad: 18px;
+  --peek: 82px;
+  --ease: cubic-bezier(0.22, 0.61, 0.24, 1);
+
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+
+  /* theme.mjs 가 채우기 전의 값. 무늬가 없어도 화면이 깨지지 않는다. */
+  --bg-pill: none;
+  --bg-sheet: none;
+  --bg-peek: none;
+  --bg-plate: none;
+  --bg-btn: none;
+  --bg-btn-primary: none;
+  --bg-menu: none;
+  --bg-modal: none;
+  --bg-field: none;
+  --bg-toast: none;
+  --bg-curtain-edge: none;
+
+  --on-pill: #efe9dd;
+  --on-sheet: #efe9dd;
+  --on-peek: #efe9dd;
+  --on-plate: #efe9dd;
+  --on-btn: #efe9dd;
+  --on-btn-primary: #efe9dd;
+  --on-menu: #efe9dd;
+  --on-modal: #efe9dd;
+  --on-field: #efe9dd;
+  --on-toast: #efe9dd;
+
+  --edge-pill: #000;
+  --edge-sheet: #000;
+  --edge-peek: #000;
+  --edge-plate: #000;
+  --edge-btn: #000;
+  --edge-btn-primary: #000;
+  --edge-menu: #000;
+  --edge-modal: #000;
+  --edge-field: #000;
+  --edge-toast: #000;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--wall);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.noscript {
+  position: absolute;
+  inset: auto 0 auto 0;
+  top: 40%;
+  margin: 0;
+  padding: 0 32px;
+  text-align: center;
+  font-family: var(--serif);
+  font-size: 18px;
+  color: var(--ink-dim);
+}
