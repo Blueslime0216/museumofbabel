@@ -13,6 +13,35 @@
     />
     <title>Museum of Babel</title>
 
+    <!-- 링크를 붙였을 때 보이는 카드 (Discord · Slack · 카카오톡 …).
+         크롤러는 자바스크립트를 돌리지 않으므로 여기 적힌 것만 읽는다.
+
+         **여기 이미지는 어느 주소로 들어와도 같다.** 크롤러는 `#` 뒤를 볼 수
+         없기 때문이다. 주소는 프래그먼트에 있고 프래그먼트는 서버로 가지 않는다.
+         작품마다 다른 그림을 카드에 띄우려면 주소를 `?` 뒤로 옮기고 그림을
+         만들어 주는 함수가 있어야 한다. ! - dev/03_로드맵.md 의 "나중에 할 일".
+
+         절대 URL 이어야 한다. 호스트를 옮기면 이 두 줄을 고쳐야 한다. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Museum of Babel" />
+    <meta property="og:title" content="Museum of Babel" />
+    <meta
+      property="og:description"
+      content="Every possible picture already hangs here. You only need the address."
+    />
+    <meta property="og:url" content="https://demo-museumofbabel.vercel.app/" />
+    <meta property="og:image" content="https://demo-museumofbabel.vercel.app/icon-512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Museum of Babel" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Museum of Babel" />
+    <meta
+      name="twitter:description"
+      content="Every possible picture already hangs here. You only need the address."
+    />
+    <meta name="twitter:image" content="https://demo-museumofbabel.vercel.app/icon-512.png" />
+
     <!-- 아이콘.
          favicon.svg   벡터. 16px 에서도 육각형이 읽힌다
          icon-*.png    무늬로 채운 로고. 어두운 벽 위에 얹어 불투명하게 만들었다
