@@ -275,6 +275,48 @@ for (const size of ['mobile', 'desktop']) {
       return best;
     });
 
+  /**
+   * 그림자를 재기 위한 표본. 고른 상태와 놓은 상태에서 각각 같은 픽셀을 읽는다.
+   *
+   * `band` 은 고른 것 위쪽 옆 작품을 가로지르는 줄이다. `at` 은 고른 것의
+   * 테두리에서 칸 간격 몇 배만큼 떨어졌는지다.
+   * `calibration` 은 그림자가 절대 닿지 않는 자리다. 아래에서 보정에 쓴다.
+   *
+   * 놓을 때 카메라가 움직이지 않으므로 두 번 다 같은 픽셀을 읽는다.
+   */
+  const shadowProbe = () =>
+    page.evaluate(() => {
+      const canvas = document.getElementById('stage');
+      const ctx = canvas.getContext('2d');
+      const dpr = canvas.width / canvas.getBoundingClientRect().width;
+      const zoom = window.__museum.camera.zoom;
+      const { data, width } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const midX = Math.round(canvas.width / 2);
+      const midY = Math.round(canvas.height / 2);
+      const lumaAt = (x, y) => {
+        const i = (Math.round(y) * width + Math.round(x)) * 4;
+        return data[i] + data[i + 1] + data[i + 2];
+      };
+
+      // 고른 것의 테두리(커진 상태)에서 시작해 위쪽 옆 작품의 끝까지.
+      // 옆 작품의 그림이 이 구간에 온전히 들어 있다 (0.53 ~ 1.47 칸).
+      const edge = zoom * 0.541;
+      const band = [];
+      for (let step = 1; step <= 92; step += 1) {
+        const y = midY - (edge + (zoom * step) / 100) * dpr;
+        for (let dx = -24; dx <= 24; dx += 4) {
+          band.push({ at: step / 100, luma: lumaAt(midX + dx * dpr, y) });
+        }
+      }
+
+      // 보정용. 화면 위쪽 띠는 고른 것에서 두 칸 넘게 떨어져 있다.
+      const calibration = [];
+      for (let y = 8; y < canvas.height * 0.18; y += 5) {
+        for (let x = 8; x < canvas.width; x += 17) calibration.push(lumaAt(x, y));
+      }
+      return { band, calibration };
+    });
+
   // 프레임마다 크기를 적어 둔다. 애니메이션이 몇 프레임에 걸쳐 있는지 본다.
   const startTrace = () =>
     page.evaluate(() => {
@@ -292,6 +334,7 @@ for (const size of ['mobile', 'desktop']) {
   await page.mouse.click(500, 420);
   await page.waitForTimeout(900);
   const dimmed = await cornerLuma();
+  const shadowOn = await shadowProbe();
   check('고르면 시트가 열린다', (await sheetState()) === 'peek');
   check('고르면 어둡게 하기가 켜진다', (await focusOf()).dimTarget === 1);
 
@@ -345,6 +388,7 @@ for (const size of ['mobile', 'desktop']) {
   await page.mouse.click(640, 430);
   await page.waitForTimeout(500);
   const released = await cornerLuma();
+  const shadowOff = await shadowProbe();
   const afterRelease = await focusOf();
   check('고르면 나머지가 어두워진다', dimmed < released, `어두울 때 ${dimmed} · 놓은 뒤 ${released}`);
   check(
@@ -353,6 +397,56 @@ for (const size of ['mobile', 'desktop']) {
   );
   check('놓으면 커진 것도 되돌아간다', afterRelease.lift === 0, `크기 ${afterRelease.lift}`);
   check('놓으면 시트가 닫힌다', (await sheetState()) === 'hidden');
+
+  // ── 그림자 ────────────────────────────────────────────────────────────
+  //
+  // **밝기를 그냥 나누면 안 된다.** 어둡게 하기는 곱셈이 아니라 아핀 변환이다
+  // (검정에 가까운 벽색을 alpha 로 얹으므로 `k·원본 + c` 가 된다). c 때문에
+  // 어두운 그림에서 비율이 커진다. 처음에 나눗셈으로 짰다가 그림에 따라
+  // 0.79 와 0.89 사이를 오가며 흔들렸다.
+  //
+  // 그래서 그림자가 닿지 않는 자리에서 k 와 c 를 먼저 맞춘다(최소제곱). 그러면
+  // "그림자가 없었다면 이 픽셀이 얼마였을까" 를 그림 내용과 무관하게 알 수 있다.
+  // 실제 값을 그 예측으로 나눈 것이 남은 밝기, 즉 1 - 그림자 진하기다.
+  {
+    const pairs = shadowOff.calibration
+      .map((plain, index) => [plain, shadowOn.calibration[index]])
+      .filter(([plain]) => plain > 30); // 벽만 있는 자리는 기울기를 못 알려 준다
+
+    const n = pairs.length;
+    const sx = pairs.reduce((a, [p]) => a + p, 0);
+    const sy = pairs.reduce((a, [, f]) => a + f, 0);
+    const sxx = pairs.reduce((a, [p]) => a + p * p, 0);
+    const sxy = pairs.reduce((a, [p, f]) => a + p * f, 0);
+    const k = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+    const c = (sy - k * sx) / n;
+
+    /** 그 구간에서 그림자가 남긴 밝기의 비율. 1 이면 그림자가 없다. */
+    const kept = (from, to) => {
+      const picked = shadowOff.band
+        .map((plain, index) => ({ at: plain.at, plain: plain.luma, lit: shadowOn.band[index].luma }))
+        .filter(s => s.at >= from && s.at <= to && k * s.plain + c > 60);
+      if (!picked.length) return null;
+      const predicted = picked.reduce((a, s) => a + (k * s.plain + c), 0);
+      const actual = picked.reduce((a, s) => a + s.lit, 0);
+      return actual / predicted;
+    };
+
+    // 그림자가 닿는 거리는 칸 간격의 0.30 이다.
+    const near = kept(0.02, 0.16); // 그림자 안
+    const mid = kept(0.45, 0.9); // 그림자 밖. 같은 옆 작품의 반대쪽 끝이다
+
+    check(
+      '고른 것 뒤로 옆 작품에 그림자가 진다',
+      near !== null && near < 0.8,
+      `가까이 남은 밝기 ${near?.toFixed(3)} (보정 k=${k.toFixed(3)} c=${c.toFixed(1)})`,
+    );
+    check(
+      '그림자가 옆 작품을 3분의 1쯤에서 놓아 준다',
+      mid !== null && mid > 0.92,
+      `먼 쪽 남은 밝기 ${mid?.toFixed(3)}`,
+    );
+  }
 
   // 끌기 시작하면 놓는다.
   //

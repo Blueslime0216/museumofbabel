@@ -15,18 +15,8 @@ import { worldToScreen } from './camera.mjs';
 /** 전시물 사이의 벽. 한 변에 대한 비율. */
 const GAP = 0.06;
 
-/**
- * 전시물의 외곽선. 모든 전시물이 크기와 무관하게 같은 선을 갖는다.
- *
- * 굵기는 화면 픽셀로 고정한다. 줌에 따라 굵어지면 줌인했을 때 액자가 아니라
- * 검은 띠가 된다.
- *
- * 경계에 **걸쳐서** 그린다 (안쪽 1px · 바깥쪽 1px). 안쪽으로만 그리면 최소
- * 줌(한 변 약 52px)에서 그림 면적의 14%를 먹는다. 바깥쪽 1px 은 어차피
- * 전시물 사이의 벽이라 잃는 것이 없다.
- */
-const EDGE_WIDTH = 2;
-const EDGE_COLOR = '#000';
+/** 이 크기를 넘으면 얇은 액자선이 생긴다. */
+const FRAME_AT = 200;
 
 /** 고른 것 외를 덮는 정도. */
 const DIM_ALPHA = 0.68;
@@ -42,6 +32,27 @@ const DIM_ALPHA = 0.68;
  * 그 값에서는 어둡게 하기가 거의 다 일하고 크기는 티가 나지 않았다.
  */
 const FOCUS_LIFT = 0.15;
+
+/**
+ * 고른 것 뒤에 지는 그림자.
+ *
+ * REACH 는 칸 간격(zoom)에 대한 비율이며 그림자가 퍼져 나가는 거리다.
+ * 0.30 이면 옆 작품 여덟 장을 각각 3분의 1 정도 덮는다. 계산은 이렇다.
+ *
+ *   고른 것의 테두리   0.94 × 1.15 / 2 = 0.541 (칸 간격 기준)
+ *   옆 작품의 앞 테두리 0.5 - 0.94 / 2 = 0.53
+ *   옆 작품의 3분의 1   0.53 + 0.94 / 3 = 0.843
+ *   필요한 거리         0.843 - 0.541 = 0.302
+ *
+ * 줌에 비례하게 두는 이유. 픽셀로 고정하면 줌아웃에서 그림자가 옆 작품을 다
+ * 덮고 줌인에서는 사라진다. 화면에서 보이는 관계가 같아야 한다.
+ *
+ * ALPHA 는 그림자를 만드는 검정의 진하기다. 화면이 그만큼 어두워지지는 않는다.
+ * 흐림이 계단을 뭉개므로 테두리 바로 옆에서도 절반쯤만 남는다. 실측으로는 옆
+ * 작품이 가까이에서 4분의 1쯤 더 어두워진다.
+ */
+const SHADOW_REACH = 0.3;
+const SHADOW_ALPHA = 0.8;
 
 /** 커지고 작아지는 빠름. 어둡게 하기보다 조금 빠르게 둔다. */
 const LIFT_RATE = 13;
@@ -192,10 +203,11 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e', reducedMo
    * 한 칸을 찍는다. grow 는 앞으로 나온 정도(0~1)다.
    *
    * 커진 칸은 옆 칸보다 **나중에** 찍어야 한다. 그리는 순서가 화면 중앙부터라서,
-   * 먼저 찍으면 뒤에 오는 옆 칸이 커진 테두리를 덮는다. draw 가 그 순서를 맡는다.
+   * 먼저 찍으면 뒤에 오는 옆 칸이 커진 테두리와 그림자를 덮는다. draw 가 그
+   * 순서를 맡는다.
    *
-   * 외곽선을 그림 위에 두르는 이유가 하나 더 있다. 고른 것이 커지면 옆 칸을 물고
-   * 들어가는데, 선이 있어야 어디까지가 어느 작품인지 보인다.
+   * 그림자도 여기서 진다. 그림이 불투명하므로 캔버스가 알아서 사각형 그림자를
+   * 만든다. 직접 사각형을 그리지 않는다.
    */
   function paintCell(item, grow = 0) {
     const bitmap = tiles.get(item.key);
@@ -206,11 +218,26 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e', reducedMo
     const left = sx - inner / 2;
     const top = sy - inner / 2;
 
-    ctx.drawImage(bitmap, left, top, inner, inner);
+    if (grow > 0.01) {
+      ctx.save();
+      ctx.shadowColor = `rgba(0,0,0,${SHADOW_ALPHA * grow})`;
+      // shadowBlur 는 변환 행렬을 타지 않는다. 그리는 좌표는 CSS 픽셀인데
+      // 그림자는 기기 픽셀이라, dpr 을 곱하지 않으면 고해상도 화면에서 절반만
+      // 퍼진다. 실측으로 확인했다.
+      ctx.shadowBlur = camera.zoom * SHADOW_REACH * grow * view.dpr;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.drawImage(bitmap, left, top, inner, inner);
+      ctx.restore();
+    } else {
+      ctx.drawImage(bitmap, left, top, inner, inner);
+    }
 
-    ctx.strokeStyle = EDGE_COLOR;
-    ctx.lineWidth = EDGE_WIDTH;
-    ctx.strokeRect(left, top, inner, inner);
+    if (inner > FRAME_AT) {
+      ctx.strokeStyle = 'rgba(239,233,221,0.16)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(left + 0.5, top + 0.5, inner - 1, inner - 1);
+    }
     return true;
   }
 
