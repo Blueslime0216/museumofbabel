@@ -94,6 +94,26 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
     return out;
   }
 
+  /**
+   * 캐시에 담기는 범위까지만 미리 렌더한다.
+   *
+   * 왜 필요한가
+   *   줌아웃 끝에서는 보이는 것만으로도 캐시의 대부분을 쓴다. 거기에 바깥 두 겹을
+   *   더하면 목록이 캐시보다 커져서 **영원히 일부가 없는 상태**가 된다.
+   *   그러면 missing 이 0 이 안 되고, 매 프레임 다시 그리고 다시 요청한다.
+   *   화면은 멀쩡해 보이지만 배터리를 태운다. 실측으로 발견했다.
+   *   (데스크톱 최소 줌에서 보이는 것만 165장, 캐시는 180장이었다.)
+   */
+  function affordableMargin(wanted) {
+    const budget = tiles.capacity * 0.9;
+    const cols = Math.ceil(view.width / camera.zoom) + 1;
+    const rows = Math.ceil(view.height / camera.zoom) + 1;
+    for (let margin = wanted; margin > 0; margin--) {
+      if ((cols + margin * 2) * (rows + margin * 2) <= budget) return margin;
+    }
+    return 0;
+  }
+
   function paintCell(item) {
     const bitmap = tiles.get(item.key);
     if (!bitmap) return false;
@@ -166,7 +186,7 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
       // 구역이 32px 이라 축소해도 경계가 살아 있다. 최근접이 훨씬 선명하다.
       ctx.imageSmoothingEnabled = false;
 
-      const list = wishlist(prefetch);
+      const list = wishlist(affordableMargin(prefetch));
       // 순위를 먼저 알린다. 이것이 없으면 캐시가 무엇을 지킬지 모른다.
       if (request) tiles.want(list);
       else tiles.keep(list);
@@ -196,6 +216,9 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
      * 목표 줌에서 보일 것을 기준으로 삼는다. 그래서 개방이 끝나는 순간에
      * 빈 칸이 없다.
      */
+    /** 지금 미리 렌더가 몇 겹까지 되는가. 개발자 패널이 본다. */
+    marginFor: affordableMargin,
+
     preheat({ timeout = 6000, zoom } = {}) {
       return new Promise(resolve => {
         const started = performance.now();

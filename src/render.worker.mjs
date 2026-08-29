@@ -38,15 +38,21 @@ self.onmessage = async event => {
   const { id, key, tier, locality, x, y } = message;
   try {
     const { spec, mix, frame } = contextFor(tier, locality);
+    // 순수 계산 시간만 잰다. 비트맵으로 옮기는 비용은 따로다.
+    const started = performance.now();
     const code = coordinatesToCode(BigInt(x), BigInt(y), mix, spec.axisBits);
     renderCode(spec, code, frame);
+    const computeMs = performance.now() - started;
 
     // 픽셀을 복사해서 넘긴다. createImageBitmap 이 비동기이므로 다음 요청이
     // 같은 프레임 버퍼에 덮어쓰면 엉뚱한 그림이 나간다. 256KB 복사는
     // 렌더 비용에 비하면 싸다.
     const pixels = new ImageData(new Uint8ClampedArray(frame.rgba), CANVAS, CANVAS);
     const bitmap = await createImageBitmap(pixels);
-    self.postMessage({ type: 'rendered', id, key, x, y, tier, locality, bitmap }, [bitmap]);
+    self.postMessage(
+      { type: 'rendered', id, key, x, y, tier, locality, computeMs, bitmap },
+      [bitmap],
+    );
   } catch (error) {
     // 있을 수 없다. 모든 좌표가 유효하기 때문이다. 그래도 형식은 갖춘다.
     self.postMessage({ type: 'failed', id, key, message: String(error?.message ?? error) });

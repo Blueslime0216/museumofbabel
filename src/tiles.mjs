@@ -41,6 +41,7 @@ export function createTiles({ workerCount = 2, cacheMax = CACHE_MAX, onArrive } 
       }
 
       stats.rendered++;
+      stats.totalMs += message.computeMs ?? 0;
       put(key, message.bitmap);
       onArrive?.(key);
     };
@@ -141,8 +142,18 @@ export function createTiles({ workerCount = 2, cacheMax = CACHE_MAX, onArrive } 
     get size() {
       return cache.size;
     },
+    /** 캐시에 들어갈 수 있는 최대 개수. stage 가 미리 렌더 범위를 정할 때 본다. */
+    get capacity() {
+      return cacheMax;
+    },
     get stats() {
-      return { ...stats, size: cache.size, pending: inFlight.size };
+      return {
+        ...stats,
+        size: cache.size,
+        pending: inFlight.size,
+        // 전시물 하나의 순수 계산 시간. 워커가 보고한 값의 평균이다.
+        avgMs: stats.rendered ? stats.totalMs / stats.rendered : 0,
+      };
     },
 
     /**
