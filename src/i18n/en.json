@@ -11,7 +11,12 @@
 
   "controls.language": "Language",
   "controls.search": "Find an artwork",
+  "controls.floor": "Change floor",
   "controls.random": "Go somewhere else",
+
+  "floor.title": "Floor",
+  "floor.name": "Floor {level}",
+  "floor.note": "Each floor is a different grain. You arrive somewhere new.",
 
   "sheet.label": "Artwork details",
   "sheet.copy": "Copy address",
@@ -34,6 +39,7 @@
   "search.title": "Find an artwork",
   "search.upload": "Upload a picture",
   "search.uploadNote": "we walk to the nearest address",
+  "search.floor": "Floor",
   "search.or": "or",
   "search.yours": "yours",
   "search.nearest": "nearest",

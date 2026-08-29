@@ -200,6 +200,120 @@ for (const size of ['mobile', 'desktop']) {
   await page.close();
 }
 
+// ── 3.5 — 층 ─────────────────────────────────────────────────────────────
+
+{
+  const page = await openPage('mobile');
+  await settled(page);
+
+  const order = await page.evaluate(() =>
+    [...document.querySelectorAll('#controls .pill')].map(button => button.id),
+  );
+  check(
+    '떠 있는 버튼 순서가 검색 · 층 · 무작위다',
+    order.join(',') === 'btn-search,btn-floor,btn-random',
+    order.join(' → '),
+  );
+
+  await page.click('#btn-floor');
+  await page.waitForTimeout(300);
+  const floors = await page.evaluate(() =>
+    [...document.querySelectorAll('#floor-list .lang')].map(button => ({
+      tier: Number(button.dataset.tier),
+      text: button.textContent,
+      current: button.getAttribute('aria-current') === 'true',
+    })),
+  );
+  check('층이 낮은 것부터 세 개다', floors.map(f => f.tier).join(',') === '4,8,16');
+  check('층마다 이름과 격자 크기가 있다', floors.every(f => /\d+\s*×\s*\d+/.test(f.text)), floors[0]?.text);
+  check('지금 층이 표시된다', floors.filter(f => f.current).length === 1);
+
+  // 1층으로 옮긴다. 자리도 바뀌어야 한다.
+  const before = await page.evaluate(() => location.hash);
+  await page.click('#floor-list .lang[data-tier="4"]');
+  await traveled(page);
+  const afterFloor = await page.evaluate(() => ({
+    tier: window.__museum.state.tier,
+    hash: location.hash,
+  }));
+  check('층을 고르면 그 층으로 간다', afterFloor.tier === 4, `tier ${afterFloor.tier}`);
+  check('층을 옮기면 자리도 바뀐다', afterFloor.hash !== before);
+  check(
+    '낮은 층은 주소가 짧다',
+    afterFloor.hash.length < before.length,
+    `${before.length}자 → ${afterFloor.hash.length}자`,
+  );
+
+  // 무작위 버튼은 층을 유지한다
+  await page.click('#btn-random');
+  await traveled(page);
+  const afterRandom = await page.evaluate(() => ({
+    tier: window.__museum.state.tier,
+    hash: location.hash,
+  }));
+  check('무작위는 지금 층 안에서 옮긴다', afterRandom.tier === 4, `tier ${afterRandom.tier}`);
+  check('무작위가 자리를 바꾼다', afterRandom.hash !== afterFloor.hash);
+
+  // 찾기의 층 선택
+  await page.click('#btn-search');
+  await page.waitForTimeout(250);
+  const segments = await page.evaluate(() =>
+    [...document.querySelectorAll('#search-floor-row .segment')].map(b => Number(b.dataset.tier)),
+  );
+  check('찾기에도 층 선택이 있다', segments.join(',') === '4,8,16');
+
+  await page.click('#search-floor-row .segment[data-tier="16"]');
+  await page.fill('#search-text', 'abc,def');
+  await page.click('#btn-go');
+  await traveled(page);
+  check(
+    '좌표만 넣으면 고른 층으로 간다',
+    (await page.evaluate(() => window.__museum.state.tier)) === 16,
+  );
+
+  // 전체 해시는 고른 층을 이긴다
+  await page.click('#btn-search');
+  await page.waitForTimeout(200);
+  await page.click('#search-floor-row .segment[data-tier="16"]');
+  await page.fill('#search-text', '#v1.4.4.abc.def');
+  await page.click('#btn-go');
+  await traveled(page);
+  check(
+    '주소에 층이 있으면 그것이 이긴다',
+    (await page.evaluate(() => window.__museum.state.tier)) === 4,
+  );
+
+  check('층 작업에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
+  await page.close();
+}
+
+// ── 3.6 — 무늬 표면이 요소를 덮는다 ──────────────────────────────────────
+
+{
+  const page = await openPage('desktop');
+  await settled(page);
+
+  // 토스트가 타일보다 넓어지면 양쪽 끝이 배경 없이 비친다. 실제로 그랬다.
+  const toast = await page.evaluate(() => {
+    const host = document.getElementById('toasts');
+    const element = document.createElement('div');
+    element.className = 'toast surface';
+    element.textContent =
+      'Could not copy. The address is shown below. This is a deliberately very long message.';
+    host.append(element);
+    const rect = element.getBoundingClientRect();
+    const tile = Number.parseFloat(getComputedStyle(element).backgroundSize);
+    element.remove();
+    return { width: Math.round(rect.width), height: Math.round(rect.height), tile };
+  });
+  check(
+    '긴 토스트도 무늬 타일 안에 들어간다',
+    toast.tile >= toast.width && toast.tile >= toast.height,
+    `${toast.width}×${toast.height} · 타일 ${toast.tile}px`,
+  );
+  await page.close();
+}
+
 // ── 4 — 무늬가 방문 동안 유지된다 ────────────────────────────────────────
 
 {

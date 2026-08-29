@@ -11,8 +11,16 @@
 //
 // 글자 입력은 세 형태를 다 받는다. 전체 URL · 해시만 · 36진수 좌표 두 개.
 
-import { CANVAS, DEFAULT_TIER, DEFAULT_LOCALITY, fromBase36, parseHash, tierSpec } from '../codec.mjs';
+import {
+  CANVAS,
+  DEFAULT_TIER,
+  DEFAULT_LOCALITY,
+  fromBase36,
+  parseHash,
+  tierSpec,
+} from '../codec.mjs';
 import { readAddress } from '../png.mjs';
+import { FLOORS } from '../floors.mjs';
 import { t } from '../i18n/index.mjs';
 
 const axisBitsFor = tier => tierSpec(tier).axisBits;
@@ -25,7 +33,7 @@ const PROJECT_TIMEOUT_MS = 30000;
  *
  * 실패하면 null 을 돌려준다. 예외를 던지지 않는다. 호출한 쪽이 토스트로 알린다.
  */
-export function parseDestination(text) {
+export function parseDestination(text, { tier = DEFAULT_TIER } = {}) {
   const trimmed = String(text ?? '').trim();
   if (!trimmed) return null;
 
@@ -44,15 +52,15 @@ export function parseDestination(text) {
   }
 
   // 36진수 좌표 두 개. 쉼표나 공백으로 나뉜다.
+  // 이때는 층 정보가 없으므로 고른 층을 쓴다.
   const pair = trimmed.split(/[\s,]+/).filter(Boolean);
   if (pair.length === 2 && pair.every(part => /^[0-9a-z]+$/i.test(part))) {
     try {
-      const bits = axisBitsFor(DEFAULT_TIER);
-      const limit = 1n << BigInt(bits);
+      const limit = 1n << BigInt(axisBitsFor(tier));
       const x = fromBase36(pair[0].toLowerCase());
       const y = fromBase36(pair[1].toLowerCase());
       if (x >= limit || y >= limit) return null;
-      return { tier: DEFAULT_TIER, locality: DEFAULT_LOCALITY, x, y };
+      return { tier, locality: DEFAULT_LOCALITY, x, y };
     } catch {
       return null;
     }
@@ -71,6 +79,40 @@ export function createSearch({ toast, onGo, getWorld }) {
   const beforeCanvas = $('compare-before');
   const afterCanvas = $('compare-after');
   const goButton = $('btn-go');
+  const floorRow = $('search-floor-row');
+
+  /** 어느 층에서 찾을지. 열 때 지금 층으로 맞춘다. */
+  let searchTier = getWorld().tier;
+
+  function renderFloors() {
+    floorRow.replaceChildren(
+      ...FLOORS.map(floor => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'segment';
+        button.dataset.tier = String(floor.tier);
+        if (floor.tier === searchTier) button.setAttribute('aria-current', 'true');
+        button.append(
+          Object.assign(document.createElement('span'), {
+            textContent: String(floor.level),
+          }),
+          Object.assign(document.createElement('small'), { textContent: floor.grid }),
+        );
+        return button;
+      }),
+    );
+  }
+
+  floorRow.addEventListener('click', event => {
+    const button = event.target.closest('.segment');
+    if (!button) return;
+    searchTier = Number(button.dataset.tier);
+    renderFloors();
+    // 층이 바뀌면 앞서 찾아 둔 결과는 뜻이 없다.
+    compare.hidden = true;
+    found = null;
+    goButton.textContent = t('common.go');
+  });
 
   let worker = null;
   let sequence = 0;
@@ -144,6 +186,8 @@ export function createSearch({ toast, onGo, getWorld }) {
 
   function open() {
     reset();
+    searchTier = getWorld().tier;
+    renderFloors();
     scrim.hidden = false;
     // 휴대폰에서 키보드가 올라오면 화면이 좁아진다. 자동으로 focus 하지 않는다.
     if (matchMedia('(pointer: fine)').matches) input.focus();
@@ -194,13 +238,12 @@ export function createSearch({ toast, onGo, getWorld }) {
     clearTimeout(guard);
     guard = setTimeout(() => stopWaiting(t('toast.projectFailed')), PROJECT_TIMEOUT_MS);
 
-    const world = getWorld();
     ensureWorker().postMessage(
       {
         type: 'project',
         id: ++sequence,
-        tier: world.tier,
-        locality: world.locality,
+        tier: searchTier,
+        locality: getWorld().locality,
         bitmap,
       },
       [bitmap],
@@ -244,7 +287,7 @@ export function createSearch({ toast, onGo, getWorld }) {
       onGo(destination);
       return;
     }
-    const destination = parseDestination(input.value);
+    const destination = parseDestination(input.value, { tier: searchTier });
     if (!destination) {
       toast(t(input.value.trim() ? 'toast.badAddress' : 'toast.nothing'));
       return;

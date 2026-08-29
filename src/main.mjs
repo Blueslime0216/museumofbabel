@@ -23,6 +23,7 @@ import { createSheet } from './ui/sheet.mjs';
 import { createHint } from './ui/hint.mjs';
 import { createSearch } from './ui/search.mjs';
 import { createLanguagePicker } from './ui/language.mjs';
+import { createFloorPicker } from './ui/floor.mjs';
 import { applyStaticText, onLanguageChange, t } from './i18n/index.mjs';
 import { attachDebug } from './ui/debug.mjs';
 
@@ -79,9 +80,17 @@ const search = createSearch({
   onGo: destination => goto(destination),
 });
 
+const floorPicker = createFloorPicker({
+  getTier: () => state.tier,
+  // 층이 바뀌면 축 비트 수가 달라져 같은 좌표가 다른 그림이 된다.
+  // 지금 자리를 유지하려 하지 않고 새 층의 무작위 자리로 간다.
+  onGo: tier => jumpRandom(tier),
+});
+
 const languagePicker = createLanguagePicker({
   onChange: () => {
     sheet.refresh();
+    floorPicker.refresh();
   },
 });
 
@@ -144,9 +153,15 @@ function goto(next, { first = false } = {}) {
   else curtain.travel(prepare);
 }
 
-function jumpRandom() {
-  const [x, y] = randomCoordinate(tierSpec(state.tier).axisBits);
-  goto({ x, y });
+/**
+ * 무작위 자리로.
+ *
+ * 층을 주지 않으면 **지금 층 안에서** 옮긴다. 무작위 버튼이 그렇게 쓴다.
+ * 층을 주면 그 층의 무작위 자리로 간다. 층 모달이 그렇게 쓴다.
+ */
+function jumpRandom(tier = state.tier) {
+  const [x, y] = randomCoordinate(tierSpec(tier).axisBits);
+  goto({ tier, x, y });
 }
 
 // ── 전시물 고르기 ────────────────────────────────────────────────────────
@@ -215,9 +230,10 @@ const ARROWS = {
 
 window.addEventListener('keydown', event => {
   // 모달이 열려 있으면 그것이 먼저 닫힌다.
-  if (event.key === 'Escape' && (search.isOpen || languagePicker.isOpen)) {
+  if (event.key === 'Escape' && (search.isOpen || languagePicker.isOpen || floorPicker.isOpen)) {
     search.close();
     languagePicker.close();
+    floorPicker.close();
     event.preventDefault();
     return;
   }
@@ -256,8 +272,9 @@ window.addEventListener('keydown', event => {
   }
 });
 
-document.getElementById('btn-random').addEventListener('click', jumpRandom);
+document.getElementById('btn-random').addEventListener('click', () => jumpRandom());
 document.getElementById('btn-search').addEventListener('click', () => search.open());
+document.getElementById('btn-floor').addEventListener('click', () => floorPicker.open());
 document.getElementById('btn-language').addEventListener('click', () => languagePicker.open());
 
 window.addEventListener('resize', resize);

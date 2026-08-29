@@ -11,7 +11,12 @@
 
   "controls.language": "언어",
   "controls.search": "작품 찾기",
+  "controls.floor": "층 옮기기",
   "controls.random": "다른 곳으로",
+
+  "floor.title": "층",
+  "floor.name": "{level}층",
+  "floor.note": "층마다 결이 다릅니다. 새로운 자리에 도착합니다.",
 
   "sheet.label": "작품 정보",
   "sheet.copy": "주소 복사",
@@ -34,6 +39,7 @@
   "search.title": "작품 찾기",
   "search.upload": "그림 올리기",
   "search.uploadNote": "가장 가까운 주소로 걸어갑니다",
+  "search.floor": "층",
   "search.or": "또는",
   "search.yours": "올린 것",
   "search.nearest": "가장 가까운 것",

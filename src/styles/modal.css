@@ -108,12 +108,21 @@ body[data-sheet='expanded'] .controls {
   align-items: center;
   pointer-events: none;
 }
+/* 무늬 타일이 300px 인데 최대 너비가 420px 이었다. 그래서 PC 에서 긴 문구가
+ * 오면 양쪽 끝이 배경 없이 비쳤다. 무늬 표면은 **요소보다 큰 타일** 이라는
+ * 규칙(surface.css) 을 어긴 것이다.
+ *
+ * repeat 로 덮는 대신 폭을 타일 안으로 묶었다. 길면 줄바꿈한다.
+ * 옆으로만 길어지는 토스트는 읽기도 나쁘다.
+ */
 .toast {
   padding: 10px 16px;
-  font: 700 13px/1.3 var(--sans);
+  font: 700 13px/1.35 var(--sans);
   letter-spacing: 0.02em;
-  max-width: min(84vw, 420px);
+  width: max-content;
+  max-width: min(84vw, 280px);
   text-align: center;
+  text-wrap: pretty;
   animation: toast-in 220ms var(--ease);
 }
 .toast[data-out='1'] {
@@ -343,4 +352,72 @@ body[data-sheet='expanded'] .controls {
 }
 .lang:active {
   filter: invert(1);
+}
+
+/* 층 고르기 — 찾기 모달 안의 작은 조각 나누기 */
+
+.segmented {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.segmented-label {
+  flex: none;
+  font: 400 10.5px/1 var(--sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--on-modal);
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.5px var(--edge-modal);
+}
+.segmented-row {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+}
+.segment {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  min-height: 42px;
+  padding: 0 4px;
+  border: 2px solid var(--on-modal);
+  border-radius: 0;
+  background: none;
+  color: var(--on-modal);
+  font: 700 15px/1 var(--sans);
+  cursor: pointer;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.8px var(--edge-modal);
+}
+.segment small {
+  font: 400 9.5px/1 var(--mono);
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+  -webkit-text-stroke: 1.2px var(--edge-modal);
+}
+.segment[aria-current='true'] {
+  background-image: var(--bg-toast);
+  background-size: 340px 340px;
+  background-repeat: no-repeat;
+  background-position: center;
+  image-rendering: pixelated;
+  color: var(--on-toast);
+  -webkit-text-stroke-color: var(--edge-toast);
+}
+.segment:active {
+  filter: invert(1);
+}
+
+/* 모달 아래의 한 줄 안내. 층 모달에서만 쓴다. */
+.modal-note {
+  margin: 14px 0 0;
+  font: 400 11.5px/1.5 var(--sans);
+  text-align: center;
+  color: var(--on-modal);
+  opacity: 0.9;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.5px var(--edge-modal);
 }

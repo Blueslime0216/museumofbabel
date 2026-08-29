@@ -82,9 +82,11 @@
   background-size: 340px 340px;
   color: var(--on-menu);
 }
+/* 타일이 요소보다 커야 무늬가 잘리지 않는다. 토스트는 최대 280px 폭이다.
+ * 여러 줄이 되어도 높이가 320px 을 넘지 않는다. */
 .toast {
   background-image: var(--bg-toast);
-  background-size: 300px 300px;
+  background-size: 320px 320px;
   color: var(--on-toast);
 }
 .input-row input {
