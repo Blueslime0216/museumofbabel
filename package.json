@@ -9,7 +9,7 @@
     "build": "node tools/sync-codec.mjs --verify && vite build",
     "preview": "vite preview",
     "sync-codec": "node tools/sync-codec.mjs",
-    "test": "node --test test/camera.test.mjs test/curtain.test.mjs test/png.test.mjs test/label.test.mjs test/theme.test.mjs",
+    "test": "node --test test/camera.test.mjs test/curtain.test.mjs test/png.test.mjs test/label.test.mjs test/theme.test.mjs test/i18n.test.mjs",
     "check-ui": "node tools/check-ui.mjs",
     "measure": "node tools/measure.mjs",
     "check": "npm run test && node tools/sync-codec.mjs --verify"

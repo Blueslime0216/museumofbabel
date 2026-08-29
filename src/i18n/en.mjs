@@ -1,4 +1,5 @@
-{
+// 영어 — 기준 사전. 다른 언어의 키는 이것과 같아야 한다 (test/i18n.test.mjs).
+export default {
   "meta.language": "English",
   "meta.native": "English",
 
@@ -58,4 +59,4 @@
   "toast.projectFailed": "Could not read that picture",
   "toast.brokenUrl": "That address could not be read. Here is somewhere else.",
   "toast.offline": "Ready to visit without a network"
-}
+};

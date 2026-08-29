@@ -5,22 +5,32 @@
 //   경로에 언어를 넣지 않는다. 좌표가 이미 해시에 있고 검색 노출이 목표가 아니다.
 //   선택은 localStorage 에 저장한다 (무늬와 달리 방문을 넘어 남는다).
 
-import en from './en.json';
-import ko from './ko.json';
+// JSON import 는 Node 와 번들러가 서로 다른 문법을 요구한다.
+// Node 는 `with { type: 'json' }` 을 강제하고 예전 번들러는 그것을 모른다.
+// 사전을 그냥 모듈로 두면 그 갈림이 아예 없어진다. 번역하기도 어렵지 않다.
+import en from './en.mjs';
+import ko from './ko.mjs';
 
 const TABLES = { en, ko };
 const STORE_KEY = 'mob.lang';
 export const LANGUAGES = Object.keys(TABLES);
 
-/** 첫 방문의 언어. 한국어가 아니면 영어다. */
+/**
+ * 첫 방문의 언어.
+ *
+ * Node 에서도 불린다 (테스트가 label.mjs 를 통해 들어온다). 그래서 브라우저
+ * 전역이 없어도 던지지 않는다. 없으면 영어다.
+ */
 function detect() {
   try {
-    const saved = localStorage.getItem(STORE_KEY);
+    const saved = globalThis.localStorage?.getItem(STORE_KEY);
     if (saved && TABLES[saved]) return saved;
   } catch {
     /* 저장이 막혀 있어도 이번 방문에는 문제가 없다 */
   }
-  for (const tag of navigator.languages ?? [navigator.language ?? 'en']) {
+  const nav = globalThis.navigator;
+  const tags = nav?.languages ?? (nav?.language ? [nav.language] : []);
+  for (const tag of tags) {
     const base = String(tag).toLowerCase().split('-')[0];
     if (TABLES[base]) return base;
   }
@@ -58,19 +68,35 @@ export function onLanguageChange(listener) {
   return () => listeners.delete(listener);
 }
 
+/** 언어를 실제로 갈아 끼운다. 저장은 하지 않는다. */
+function adopt(code) {
+  current = code;
+  if (globalThis.document) applyStaticText();
+  for (const listener of listeners) listener(code);
+}
+
 export function setLanguage(code) {
   if (!TABLES[code] || code === current) return false;
-  current = code;
   try {
-    localStorage.setItem(STORE_KEY, code);
+    globalThis.localStorage?.setItem(STORE_KEY, code);
   } catch {
-    /* 무시 */
+    /* 저장이 막혀 있어도 이번 방문에는 바뀐 채로 남는다 */
   }
-  document.documentElement.lang = code;
-  applyStaticText();
-  for (const listener of listeners) listener(code);
+  adopt(code);
   return true;
 }
+
+// 탭이 여러 개 열려 있을 때. 한쪽에서 바꾸면 나머지도 따라온다.
+//
+// 이것이 없으면 탭 A 에서 영어로 바꾸고 탭 B 로 돌아왔을 때 B 는 한국어로
+// 남는다. 저장된 값과 화면이 어긋난 상태이며, 관람객에게는 "바꿨는데 안 바뀐다"
+// 로 보인다. 새로고침해야 겨우 맞는다.
+globalThis.addEventListener?.('storage', event => {
+  if (event.key !== STORE_KEY) return;
+  const next = event.newValue;
+  if (!next || !TABLES[next] || next === current) return;
+  adopt(next);
+});
 
 /** data-i18n 이 붙은 요소를 한 번에 채운다. */
 export function applyStaticText(root = document) {
