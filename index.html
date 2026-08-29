@@ -25,15 +25,25 @@
       id="stage"
       class="stage"
       role="application"
+      tabindex="0"
+      data-i18n-label="stage.label"
       aria-label="Museum floor. Drag to move, pinch or scroll to zoom, tap an artwork to inspect it. Arrow keys move to the next artwork."
     ></canvas>
+
+    <!-- 포커스가 옮겨질 때 작품 라벨을 읽어 준다. 캔버스라 이것이 유일한 길이다. -->
+    <p class="sr-only" id="announcer" aria-live="polite" aria-atomic="true"></p>
 
     <!-- 상시 비네트. 전시장 조명의 느낌이며 개방의 끝점을 자연스럽게 만든다. -->
     <div class="vignette" aria-hidden="true"></div>
 
     <!-- 위 층: UI. 실제 컨트롤 자리만 입력을 받는다. -->
     <div class="overlay">
-      <button class="ui pill pill-language" id="btn-language" aria-label="Language">
+      <button
+        class="ui pill pill-language"
+        id="btn-language"
+        data-i18n-label="controls.language"
+        aria-label="Language"
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="9" />
           <path d="M3 12h18M12 3c2.6 2.4 2.6 15.6 0 18M12 3c-2.6 2.4-2.6 15.6 0 18" />
@@ -41,13 +51,23 @@
       </button>
 
       <div class="ui controls" id="controls">
-        <button class="pill" id="btn-search" aria-label="Find an artwork">
+        <button
+          class="pill"
+          id="btn-search"
+          data-i18n-label="controls.search"
+          aria-label="Find an artwork"
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="10.5" cy="10.5" r="6.5" />
             <path d="M15.5 15.5L21 21" />
           </svg>
         </button>
-        <button class="pill" id="btn-random" aria-label="Go somewhere else">
+        <button
+          class="pill"
+          id="btn-random"
+          data-i18n-label="controls.random"
+          aria-label="Go somewhere else"
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <rect x="3.5" y="3.5" width="17" height="17" rx="2" />
             <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
@@ -59,7 +79,7 @@
         </button>
       </div>
 
-      <p class="hint" id="hint" aria-hidden="true">drag to explore</p>
+      <p class="hint" id="hint" data-i18n="stage.hint" aria-hidden="true">drag to explore</p>
 
       <!-- 시트 (휴대폰) / 플로팅 패널 (PC). 한 코드, 배치만 갈린다. -->
       <section
@@ -82,20 +102,21 @@
           </div>
 
           <div class="actions">
-            <button class="btn" id="btn-copy">Copy address</button>
+            <button class="btn" id="btn-copy" data-i18n="sheet.copy">Copy address</button>
             <div class="menu-wrap">
               <button class="btn btn-primary" id="btn-download" aria-expanded="false">
-                Download
+                <span data-i18n="sheet.download">Download</span>
                 <svg class="caret" viewBox="0 0 12 12" aria-hidden="true">
                   <path d="M2.5 4.5L6 8l3.5-3.5" />
                 </svg>
               </button>
               <div class="menu" id="download-menu" hidden>
                 <button class="menu-item" data-size="256">
-                  <span>Original</span><span class="menu-note">256 px</span>
+                  <span data-i18n="sheet.original">Original</span
+                  ><span class="menu-note">256 px</span>
                 </button>
                 <button class="menu-item" data-size="1024">
-                  <span>Large</span><span class="menu-note">1024 px</span>
+                  <span data-i18n="sheet.large">Large</span><span class="menu-note">1024 px</span>
                 </button>
               </div>
             </div>
@@ -104,23 +125,84 @@
           <div class="plaque">
             <h2 class="plaque-title" id="plaque-title">—</h2>
             <hr />
-            <p>Anonymous, undated</p>
+            <p data-i18n="sheet.author">Anonymous, undated</p>
             <p id="plaque-medium">—</p>
             <p id="plaque-acc">—</p>
-            <p class="plaque-owner">Museum of Babel, permanent collection</p>
+            <p class="plaque-owner" data-i18n="sheet.owner">
+              Museum of Babel, permanent collection
+            </p>
           </div>
 
           <section class="field">
-            <h3>Address <span class="note">tap to expand</span></h3>
+            <h3>
+              <span data-i18n="sheet.address">Address</span>
+              <span class="note" data-i18n="sheet.expand">tap to expand</span>
+            </h3>
             <p class="mono address panel" id="address" data-open="0">—</p>
           </section>
 
           <section class="field">
-            <h3>Record</h3>
+            <h3><span data-i18n="sheet.record">Record</span></h3>
             <dl class="record panel" id="record"></dl>
           </section>
         </div>
       </section>
+    </div>
+
+    <!-- 모달: 찾기 -->
+    <div class="scrim" id="scrim-search" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="search-title">
+        <h2 class="modal-title" id="search-title" data-i18n="search.title">Find an artwork</h2>
+
+        <button class="dropzone" id="dropzone" data-busy="0" data-over="0">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 16V4M12 4L7.5 8.5M12 4l4.5 4.5" />
+            <path d="M4 15v3.5A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5V15" />
+          </svg>
+          <span data-i18n="search.upload">Upload a picture</span>
+          <small data-i18n="search.uploadNote">we walk to the nearest address</small>
+        </button>
+        <input type="file" id="search-file" accept="image/*" hidden />
+
+        <div class="compare" id="compare" hidden>
+          <figure>
+            <canvas id="compare-before" width="256" height="256"></canvas>
+            <figcaption data-i18n="search.yours">yours</figcaption>
+          </figure>
+          <figure>
+            <canvas id="compare-after" width="256" height="256"></canvas>
+            <figcaption data-i18n="search.nearest">nearest</figcaption>
+          </figure>
+        </div>
+
+        <div class="or"><span data-i18n="search.or">or</span></div>
+
+        <label class="input-row">
+          <input
+            type="text"
+            id="search-text"
+            placeholder="#v1.8.4.…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </label>
+
+        <div class="modal-actions">
+          <button class="btn" data-close data-i18n="common.cancel">Cancel</button>
+          <button class="btn btn-primary" id="btn-go" data-i18n="common.go">Go</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달: 언어 -->
+    <div class="scrim" id="scrim-language" hidden>
+      <div class="modal modal-narrow" role="dialog" aria-modal="true" aria-labelledby="lang-title">
+        <h2 class="modal-title" id="lang-title" data-i18n="language.title">Language</h2>
+        <ul class="lang-list" id="lang-list"></ul>
+        <div class="modal-actions">
+          <button class="btn" data-close data-i18n="common.close">Close</button>
+        </div>
+      </div>
     </div>
 
     <!-- 커튼: 암전 → 교체 → 원형 개방 -->

@@ -15,10 +15,11 @@
 import { CANVAS, formatHash, shortenNumber, toBase36 } from '../codec.mjs';
 import { describe } from '../label.mjs';
 import { downloadArtwork } from '../download.mjs';
+import { t } from '../i18n/index.mjs';
 
 const DEBUG_HOLD_MS = 700;
 
-export function createSheet({ root, toast, onNeighbour }) {
+export function createSheet({ toast, onShow }) {
   const $ = id => document.getElementById(id);
 
   const sheet = $('sheet');
@@ -63,8 +64,8 @@ export function createSheet({ root, toast, onNeighbour }) {
     $('peek-title').textContent = info.title;
     $('peek-acc').textContent = info.accession;
     $('plaque-title').textContent = info.title;
-    $('plaque-medium').textContent = `Mixed-radix address, ${info.bytes} bytes`;
-    $('plaque-acc').textContent = `Acc. no. ${info.accession}`;
+    $('plaque-medium').textContent = t('sheet.medium', { bytes: info.bytes });
+    $('plaque-acc').textContent = t('sheet.accession', { id: info.accession });
     $('address').textContent = current.hash;
     $('address').dataset.open = '0';
 
@@ -73,11 +74,11 @@ export function createSheet({ root, toast, onNeighbour }) {
     if (artwork.bitmap) detailCtx.drawImage(artwork.bitmap, 0, 0);
 
     const rows = [
-      ['Floor', `${artwork.tier} × ${artwork.tier}`],
-      ['Zones', String(info.zones)],
-      ['Address', `${info.bytes} bytes · ${info.bits} bits`],
-      ['Quantization', `${info.quant} / 15`],
-      ['Palette', `${info.palette.primary} · ${info.palette.secondary}`],
+      [t('sheet.floor'), `${artwork.tier} × ${artwork.tier}`],
+      [t('sheet.zones'), String(info.zones)],
+      [t('sheet.addressSize'), `${info.bytes} B · ${info.bits} bit`],
+      [t('sheet.quantization'), `${info.quant} / 15`],
+      [t('sheet.palette'), `${info.palette.primary} · ${info.palette.secondary}`],
       ['x', shortenNumber(toBase36(artwork.x), 7, 5)],
       ['y', shortenNumber(toBase36(artwork.y), 7, 5)],
     ];
@@ -92,6 +93,12 @@ export function createSheet({ root, toast, onNeighbour }) {
     );
 
     if (state === 'hidden') setState('peek');
+    onShow?.(info);
+  }
+
+  /** 언어가 바뀌면 지금 보이는 내용을 다시 채운다. */
+  function refresh() {
+    if (current) show(current);
   }
 
   // ── 끌기 ───────────────────────────────────────────────────────────────
@@ -145,10 +152,10 @@ export function createSheet({ root, toast, onNeighbour }) {
     const url = `${location.origin}${location.pathname}${current.hash}`;
     try {
       await navigator.clipboard.writeText(url);
-      toast('Address copied');
+      toast(t('toast.copied'));
     } catch {
       // 클립보드가 막힌 환경도 있다. 조용히 실패하지 않는다.
-      toast('Could not copy. The address is shown below.');
+      toast(t('toast.copyFailed'));
       $('address').dataset.open = '1';
     }
   });
@@ -171,7 +178,7 @@ export function createSheet({ root, toast, onNeighbour }) {
         stamp,
       });
     } catch {
-      toast('Could not save the file');
+      toast(t('toast.saveFailed'));
     }
   }
 
@@ -182,7 +189,7 @@ export function createSheet({ root, toast, onNeighbour }) {
     holdFired = true;
     navigator.vibrate?.(24);
     closeMenu();
-    toast('Debug: saved without the address');
+    toast(t('toast.debug'));
     save(CANVAS, { stamp: false });
   }
 
@@ -222,6 +229,7 @@ export function createSheet({ root, toast, onNeighbour }) {
   return {
     show,
     close,
+    refresh,
     collapse() {
       if (state === 'expanded') setState('peek');
     },

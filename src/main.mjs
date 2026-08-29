@@ -21,6 +21,10 @@ import { applyTheme } from './theme.mjs';
 import { createToasts } from './ui/toast.mjs';
 import { createSheet } from './ui/sheet.mjs';
 import { createHint } from './ui/hint.mjs';
+import { createSearch } from './ui/search.mjs';
+import { createLanguagePicker } from './ui/language.mjs';
+import { applyStaticText, onLanguageChange, t } from './i18n/index.mjs';
+import { attachDebug } from './ui/debug.mjs';
 
 /** 개방이 시작될 때의 줌 배율. 3×3 쯤이 보이는 상태에서 벌어진다. */
 const OPEN_FROM = 1.85;
@@ -59,7 +63,27 @@ const tiles = createTiles({
 });
 
 const stage = createStage({ canvas, camera, tiles });
-const sheet = createSheet({ root: document.body, toast });
+const announcer = document.getElementById('announcer');
+
+const sheet = createSheet({
+  toast,
+  // 캔버스에는 읽어 줄 DOM 이 없다. 라벨을 여기서 읽어 준다.
+  onShow: info => {
+    announcer.textContent = `${info.title}. ${t('sheet.accession', { id: info.accession })}`;
+  },
+});
+
+const search = createSearch({
+  toast,
+  getWorld: () => ({ tier: state.tier, locality: state.locality }),
+  onGo: destination => goto(destination),
+});
+
+const languagePicker = createLanguagePicker({
+  onChange: () => {
+    sheet.refresh();
+  },
+});
 
 let wantedForSheet = null;
 let sheetCell = { i: 0, j: 0 };
@@ -190,6 +214,16 @@ const ARROWS = {
 };
 
 window.addEventListener('keydown', event => {
+  // 모달이 열려 있으면 그것이 먼저 닫힌다.
+  if (event.key === 'Escape' && (search.isOpen || languagePicker.isOpen)) {
+    search.close();
+    languagePicker.close();
+    event.preventDefault();
+    return;
+  }
+  // 글자를 입력하는 중에는 미술관 조작을 받지 않는다.
+  if (event.target instanceof HTMLInputElement) return;
+
   if (event.key === 'Escape') {
     if (sheet.escape()) {
       if (!sheet.open) {
@@ -223,12 +257,8 @@ window.addEventListener('keydown', event => {
 });
 
 document.getElementById('btn-random').addEventListener('click', jumpRandom);
-document.getElementById('btn-search').addEventListener('click', () => {
-  toast('Find is coming next');
-});
-document.getElementById('btn-language').addEventListener('click', () => {
-  toast('Language is coming next');
-});
+document.getElementById('btn-search').addEventListener('click', () => search.open());
+document.getElementById('btn-language').addEventListener('click', () => languagePicker.open());
 
 window.addEventListener('resize', resize);
 window.addEventListener('hashchange', () => {
@@ -282,11 +312,25 @@ function frame(now) {
 
 // ── 시작 ─────────────────────────────────────────────────────────────────
 
+applyStaticText();
+onLanguageChange(() => applyStaticText());
 applyTheme();
 resize();
-if (state.broken) toast('That address could not be read. Here is somewhere else.');
+if (state.broken) toast(t('toast.brokenUrl'));
 goto(state, { first: true });
 requestAnimationFrame(frame);
+
+attachDebug({ camera, curtain, tiles, stage, sheet, getState: () => state });
+
+// 오프라인 지원. 시연장 와이파이가 죽어도 관람이 계속된다.
+// 개발 중에는 붙이지 않는다. 캐시가 고친 파일을 가린다.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+      /* 지원하지 않는 환경도 있다. 없어도 관람에는 지장이 없다. */
+    });
+  });
+}
 
 // 개발용 손잡이. D5 의 ?debug=1 패널이 이 자리를 대신한다.
 Object.assign(window, {
