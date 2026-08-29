@@ -9,8 +9,13 @@
 //   그 밖의 것은 cache-first. 이름에 해시가 붙어 있어 내용이 바뀌면 이름도 바뀐다
 //
 // 캐시 이름에 버전을 둔다. 올리면 옛 캐시를 지운다.
+//
+// **`public/` 의 파일을 고치면 반드시 이 값을 올려야 한다.**
+//   빌드가 이름에 해시를 붙여 주는 것은 `assets/` 뿐이다. 아이콘 · 매니페스트 ·
+//   파비콘은 이름이 그대로이므로 cache-first 에 걸려 옛 것이 영원히 남는다.
+//   실제로 아이콘을 갈아 끼우면서 이 함정을 확인했다.
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `museum-of-babel-${VERSION}`;
 
 self.addEventListener('install', () => {
