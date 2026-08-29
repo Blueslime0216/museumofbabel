@@ -1,7 +1,10 @@
 // 언어 — 문자열 사전과 t()
 //
 // 요구사항 9장.
-//   기본은 영어. 목록은 영어와 한국어. 문자열 파일만 추가하면 늘어난다.
+//   기본은 영어. 목록은 영어 · 한국어 · 일본어 · 중국어 · 러시아어.
+//   문자열 파일을 만들어 아래 TABLES 에 넣으면 목록과 모달이 저절로 따라온다.
+//   **사전만으로 끝나지 않는다.** 작품 제목은 `label.mjs` 의 낱말 표에서 나온다.
+//   그쪽에 언어를 넣지 않으면 화면은 번역됐는데 제목만 영어로 남는다.
 //   경로에 언어를 넣지 않는다. 좌표가 이미 해시에 있고 검색 노출이 목표가 아니다.
 //   선택은 localStorage 에 저장한다 (무늬와 달리 방문을 넘어 남는다).
 
@@ -10,8 +13,12 @@
 // 사전을 그냥 모듈로 두면 그 갈림이 아예 없어진다. 번역하기도 어렵지 않다.
 import en from './en.mjs';
 import ko from './ko.mjs';
+import ja from './ja.mjs';
+import zh from './zh.mjs';
+import ru from './ru.mjs';
 
-const TABLES = { en, ko };
+// 목록에 보이는 순서다. 영어가 기준이고 그 다음이 한국어다. 나머지는 화자 수 순.
+const TABLES = { en, ko, ja, zh, ru };
 const STORE_KEY = 'mob.lang';
 export const LANGUAGES = Object.keys(TABLES);
 

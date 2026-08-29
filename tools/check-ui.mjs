@@ -917,6 +917,53 @@ for (const size of ['mobile', 'desktop']) {
     `${koreanTitle} → ${englishTitle}`,
   );
 
+  // ── 나중에 넣은 세 언어 ────────────────────────────────────────────────
+  //
+  // 사전만 만들고 label.mjs 의 낱말 표를 잊으면 **화면은 번역되는데 제목만
+  // 영어로 남는다.** 단위 검사가 낱말 표를 세지만, 실제로 고른 뒤에 벽 라벨이
+  // 그 언어로 바뀌는지는 여기서만 보인다.
+  {
+    const listed = await page.$$eval('#lang-list .lang', nodes =>
+      nodes.map(node => node.dataset.lang),
+    );
+    check(
+      '언어 목록이 다섯 개다',
+      listed.join(',') === 'en,ko,ja,zh,ru',
+      listed.join(',') || '없다',
+    );
+
+    const SCRIPTS = {
+      ja: /[\u3040-\u30ff\u3400-\u9fff]/,
+      zh: /[\u3400-\u9fff]/,
+      ru: /[\u0400-\u04ff]/,
+    };
+    for (const [code, script] of Object.entries(SCRIPTS)) {
+      await page.click('#btn-language');
+      await page.waitForTimeout(220);
+      await page.click(`#lang-list .lang[data-lang="${code}"]`);
+      await page.waitForTimeout(320);
+      const state = await page.evaluate(() => ({
+        lang: document.documentElement.lang,
+        title: document.getElementById('plaque-title').textContent,
+        copy: document.querySelector('#btn-copy')?.textContent ?? '',
+      }));
+      check(
+        `${code} 로 바꾸면 제목까지 그 언어가 된다`,
+        state.lang === code &&
+          script.test(state.title) &&
+          !/[A-Za-z]/.test(state.title) &&
+          script.test(state.copy),
+        `lang=${state.lang} · ${state.title} · ${state.copy}`,
+      );
+    }
+
+    // 아래 검사들은 영어를 전제한다. 돌려 놓는다.
+    await page.click('#btn-language');
+    await page.waitForTimeout(220);
+    await page.click('#lang-list .lang[data-lang="en"]');
+    await page.waitForTimeout(320);
+  }
+
   /** 표면 하나를 열고 한글이 남았는지 본다. */
   async function scan(label, before) {
     if (before) await before();
