@@ -16,6 +16,7 @@
 // 배포 뒤에 User-Agent 를 바꿔 요청해 보는 것은 사람의 몫이다.
 
 import { inflateSync } from 'node:zlib';
+import { readFileSync } from 'node:fs';
 
 import art from '../api/art.mjs';
 import card from '../api/card.mjs';
@@ -63,6 +64,135 @@ async function call(handler, ...args) {
   const response = fakeResponse();
   await handler(request(...args), response);
   return response.state;
+}
+
+// ── 0 — vercel.json 이 스키마를 지키는가 ─────────────────────────────────
+//
+// **왜 이 검사가 있는가.** 설명을 남기려고 `"//": "…"` 키를 넣었다. JSON 에는
+// 주석이 없고 Vercel 의 설정 스키마는 모르는 키를 거부한다. 배포가 실패했다.
+//
+// 그런데 **사이트는 멀쩡해 보였다.** 배포가 실패하면 이전 배포가 그대로 살아
+// 있기 때문이다. 링크 카드에 옛 그림이 뜨는 것을 보고서야 알았다. 조용히
+// 실패하는 종류라 검사로 막아야 한다.
+{
+  const text = readFileSync(new URL('../vercel.json', import.meta.url), 'utf8');
+  let config = null;
+  try {
+    config = JSON.parse(text);
+  } catch (error) {
+    check('설정: JSON 으로 읽힌다', false, String(error.message));
+  }
+
+  if (config) {
+    check('설정: JSON 으로 읽힌다', true);
+
+    // 어디에도 주석 키가 없어야 한다
+    const commentKeys = [];
+    const walk = (node, path) => {
+      if (Array.isArray(node)) {
+        node.forEach((item, index) => walk(item, `${path}[${index}]`));
+      } else if (node && typeof node === 'object') {
+        for (const [key, value] of Object.entries(node)) {
+          if (key.startsWith('//')) commentKeys.push(`${path}.${key}`);
+          walk(value, `${path}.${key}`);
+        }
+      }
+    };
+    walk(config, '');
+    check(
+      '설정: 주석 키가 없다',
+      commentKeys.length === 0,
+      commentKeys.join(' · ') || 'JSON 에는 주석이 없다. 설명은 문서에 쓴다',
+    );
+
+    // 스키마가 아는 키만 쓴다. 전부는 아니고 우리가 쓰는 것만 적어 둔다.
+    const TOP = new Set([
+      'buildCommand',
+      'outputDirectory',
+      'installCommand',
+      'devCommand',
+      'framework',
+      'cleanUrls',
+      'trailingSlash',
+      'rewrites',
+      'redirects',
+      'headers',
+      'functions',
+      'regions',
+      'crons',
+      'images',
+      'github',
+      '$schema',
+    ]);
+    const unknownTop = Object.keys(config).filter(key => !TOP.has(key));
+    check('설정: 최상위 키가 모두 알려진 것이다', unknownTop.length === 0, unknownTop.join(' · '));
+
+    const RULE = { rewrites: ['source', 'destination', 'has', 'missing'], headers: ['source', 'headers', 'has', 'missing'] };
+    for (const [section, allowed] of Object.entries(RULE)) {
+      const bad = [];
+      for (const [index, rule] of (config[section] ?? []).entries()) {
+        for (const key of Object.keys(rule)) {
+          if (!allowed.includes(key)) bad.push(`${section}[${index}].${key}`);
+        }
+      }
+      check(`설정: ${section} 규칙에 모르는 키가 없다`, bad.length === 0, bad.join(' · '));
+    }
+
+    // has 의 정규식이 실제로 컴파일되는가. Vercel 은 Rust 엔진을 쓰지만
+    // 인라인 플래그 같은 것을 안 쓰면 자바스크립트에서도 같은 뜻이다.
+    const patterns = [];
+    for (const rule of config.rewrites ?? []) {
+      for (const condition of rule.has ?? []) {
+        if (condition.value) patterns.push(condition.value);
+      }
+    }
+    let compiled = true;
+    let inlineFlag = null;
+    for (const pattern of patterns) {
+      try {
+        new RegExp(pattern);
+      } catch {
+        compiled = false;
+      }
+      // (?i) 류는 엔진마다 다르다. 쓰지 않는다.
+      if (/\(\?[a-z]/.test(pattern)) inlineFlag = pattern;
+    }
+    check('설정: has 정규식이 컴파일된다', compiled, `${patterns.length}개`);
+    check(
+      '설정: has 정규식에 인라인 플래그가 없다',
+      inlineFlag === null,
+      inlineFlag ?? '엔진마다 다르게 읽힐 수 있다',
+    );
+
+    // 크롤러 규칙이 실제로 크롤러를 잡는가
+    const crawlerRule = (config.rewrites ?? []).find(rule => rule.destination === '/api/card');
+    check('설정: 크롤러를 /api/card 로 보내는 규칙이 있다', Boolean(crawlerRule));
+    if (crawlerRule) {
+      const agent = crawlerRule.has?.find(c => c.type === 'header')?.value;
+      const test = new RegExp(`^${agent}$`);
+      const shouldMatch = [
+        'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+        'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)',
+        'Twitterbot/1.0',
+        'facebookexternalhit/1.1',
+        'TelegramBot (like TwitterBot)',
+        'Mozilla/5.0 (compatible; kakaotalk-scrap/1.0)',
+        'WhatsApp/2.19.81 A',
+        'Mozilla/5.0 (compatible; LinkedInBot/1.0)',
+        'Iframely/1.3.1',
+        'Embedly +1.0',
+      ];
+      const shouldNot = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
+      ];
+      const missed = shouldMatch.filter(ua => !test.test(ua));
+      const caught = shouldNot.filter(ua => test.test(ua));
+      check('설정: 크롤러를 잡는다', missed.length === 0, missed.map(u => u.slice(0, 32)).join(' · '));
+      check('설정: 사람은 안 잡는다', caught.length === 0, caught.map(u => u.slice(0, 32)).join(' · '));
+    }
+  }
 }
 
 // ── 4 — 기록을 남기지 않는다 (먼저 심는다) ───────────────────────────────

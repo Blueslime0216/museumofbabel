@@ -5,16 +5,13 @@
   "trailingSlash": false,
   "rewrites": [
     {
-      "//": "링크 카드용. ?a= 가 있고 크롤러가 왔을 때만 함수를 태운다.",
-      "//2": "사람은 이 규칙에 걸리지 않고 정적 index.html 을 CDN 에서 받는다.",
-      "//3": "그래서 함수 실행이 최소로 줄고 기록도 그만큼 안 생긴다.",
       "source": "/",
       "has": [
         { "type": "query", "key": "a" },
         {
           "type": "header",
           "key": "user-agent",
-          "value": ".*(?i:discord|slack|telegram|twitterbot|facebookexternalhit|whatsapp|linkedinbot|kakao|line-|skype|embedly|redditbot|mastodon|pleroma|bluesky|signal|iframely|vkshare|bot|crawler|spider|preview|unfurl|opengraph).*"
+          "value": ".*([Bb]ot|[Cc]rawler|[Ss]pider|[Dd]iscord|[Ss]lack|[Tt]elegram|facebookexternalhit|[Ww]hats[Aa]pp|[Kk]akao|[Ee]mbedly|[Ii]framely|[Pp]review|[Uu]nfurl|[Oo]pen[Gg]raph).*"
         }
       ],
       "destination": "/api/card"
@@ -39,11 +36,12 @@
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
-      "//": "그림은 주소가 같으면 언제나 같다. 영구 캐시로 두면 두 번째 요청부터",
-      "//2": "CDN 이 답하고 함수가 실행되지 않는다. 실행되지 않으면 기록도 없다.",
       "source": "/api/art",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, s-maxage=31536000, immutable" },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, s-maxage=31536000, immutable"
+        },
         { "key": "Referrer-Policy", "value": "no-referrer" }
       ]
     },
