@@ -13,7 +13,7 @@
 import { tierSpec, coordinatesToCode, localityMix, randomCoordinate } from './codec.mjs';
 import { createCamera, MIN_CELL } from './camera.mjs';
 import { createCurtainState, attachCurtain, PHASE } from './curtain.mjs';
-import { createTiles, tileKey } from './tiles.mjs';
+import { createTiles } from './tiles.mjs';
 import { createStage } from './stage.mjs';
 import { createInput } from './input.mjs';
 import { readState, createHashWriter } from './hash.mjs';
@@ -63,7 +63,7 @@ const tiles = createTiles({
   },
 });
 
-const stage = createStage({ canvas, camera, tiles });
+const stage = createStage({ canvas, camera, tiles, reducedMotion });
 const announcer = document.getElementById('announcer');
 
 const sheet = createSheet({
@@ -97,6 +97,15 @@ const languagePicker = createLanguagePicker({
 let wantedForSheet = null;
 let sheetCell = { i: 0, j: 0 };
 
+/**
+ * URL 에 마지막으로 적은 중앙 칸.
+ *
+ * 이것이 없으면 프레임마다 좌표를 만들고 해시 문자열을 만든다. 층 16 에서는
+ * 그 하나가 0.04ms 이고, 아무 일도 안 하는 화면에서 계속 태운다.
+ * 중앙 칸이 바뀔 때만 hash 를 건드린다. 요구사항 6장이 원래 말한 것이다.
+ */
+let lastCenter = null;
+
 // ── 화면 크기 ────────────────────────────────────────────────────────────
 
 /** 화면 크기에서 기본 줌을 정한다. 휴대폰에서 3열쯤 보인다. */
@@ -117,6 +126,9 @@ function resize() {
 
 function applyWorld() {
   spec = tierSpec(state.tier);
+  // 캐시를 비운다. 새 기준점의 칸은 전부 다른 그림이므로 남겨 둘 이유가 없다.
+  // 그냥 두면 층 16 에서 46MB 가 쓸모없이 남아 있게 된다.
+  tiles.invalidate();
   stage.setWorld({
     tier: state.tier,
     locality: state.locality,
@@ -125,6 +137,7 @@ function applyWorld() {
     axisBits: spec.axisBits,
   });
   camera.snapTo({ x: 0, y: 0 });
+  lastCenter = null;
 }
 
 /**
@@ -167,13 +180,16 @@ function jumpRandom(tier = state.tier) {
 function openSheetAt(i, j) {
   sheetCell = { i, j };
   const [x, y] = stage.coordOf(i, j);
-  const key = tileKey(state.tier, state.locality, x, y);
+  const key = stage.keyOf(i, j);
   const bitmap = tiles.get(key);
 
   if (!bitmap) {
     // 아직 안 그려졌다. 도착하면 다시 부른다.
     wantedForSheet = key;
-    tiles.want([{ key, i, j, x, y, tier: state.tier, locality: state.locality }]);
+    tiles.want(
+      [{ key, i, j, tier: state.tier, locality: state.locality }],
+      stage.coordOf,
+    );
     return;
   }
 
@@ -335,6 +351,9 @@ function frame(now) {
     dirty = true;
   }
 
+  // 고른 것이 앞으로 나오고 나머지가 어두워지는 애니메이션. 카메라와 같은 시계다.
+  if (stage.animate(dt)) dirty = true;
+
   paintCurtain();
 
   if (dirty) {
@@ -343,9 +362,16 @@ function frame(now) {
     dirty = missing > 0 || !camera.settled;
   }
 
+  // 중앙 칸이 바뀔 때만 URL 을 건드린다. 층 16 의 좌표는 3212비트여서
+  // 프레임마다 만들면 그것만으로 예산을 먹는다.
   if (curtain.phase === PHASE.CLEAR) {
-    const [cx, cy] = stage.coordOf(Math.round(camera.x), Math.round(camera.y));
-    hash.set({ ...state, x: cx, y: cy }, { paused: input.dragging || input.pinching });
+    const i = Math.round(camera.x);
+    const j = Math.round(camera.y);
+    if (!lastCenter || lastCenter.i !== i || lastCenter.j !== j) {
+      lastCenter = { i, j };
+      const [cx, cy] = stage.coordOf(i, j);
+      hash.set({ ...state, x: cx, y: cy }, { paused: input.dragging || input.pinching });
+    }
   }
 
   requestAnimationFrame(frame);
@@ -388,9 +414,21 @@ Object.assign(window, {
     get curtain() {
       return { phase: curtain.phase, open: curtain.openProgress, dim: curtain.dimProgress };
     },
-    /** 고른 것과 어둡게 하는 정도. 화면 검사가 이것을 본다. */
+    /**
+     * 고른 것과 어둡게 하는 정도. 화면 검사가 이것을 본다.
+     *
+     * dim 은 지금 값이고 dimTarget 은 목표값이다. 애니메이션이 붙었으므로
+     * "놓았는가" 를 물을 때는 cell 이나 dimTarget 을 봐야 한다.
+     */
     get focus() {
-      return { cell: stage.focus, dim: stage.dim };
+      return {
+        cell: stage.focus,
+        dim: stage.dim,
+        dimTarget: stage.dimTarget,
+        lift: stage.liftNow,
+        lifting: stage.liftCount,
+        liftScale: stage.liftScale,
+      };
     },
     get sheet() {
       return { state: sheet.state, title: sheet.artwork?.info?.title ?? null };

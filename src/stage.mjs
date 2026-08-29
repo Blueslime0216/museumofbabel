@@ -10,9 +10,7 @@
 // 이 파일이 정하지 않는 것
 //   어떻게 가져오는가 (tiles) · 어디를 보는가 (camera)
 
-import { visibleCells, worldToScreen } from './camera.mjs';
-import { tileKey } from './tiles.mjs';
-import { wrap } from './codec.mjs';
+import { worldToScreen } from './camera.mjs';
 
 /** 전시물 사이의 벽. 한 변에 대한 비율. */
 const GAP = 0.06;
@@ -23,13 +21,55 @@ const FRAME_AT = 200;
 /** 고른 것 외를 덮는 정도. */
 const DIM_ALPHA = 0.68;
 
-export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
+/**
+ * 고른 것이 한 걸음 앞으로 나온 만큼. 한 변에 대한 비율.
+ *
+ * 0.07 이면 안쪽 크기가 0.94 → 1.006 이 된다. 벽(GAP)을 겨우 메우는 정도이며
+ * 옆 전시물을 덮지 않는다. 더 키우면 격자가 흐트러져 보인다.
+ */
+const FOCUS_LIFT = 0.07;
+
+/** 커지고 작아지는 빠름. 어둡게 하기보다 조금 빠르게 둔다. */
+const LIFT_RATE = 13;
+const DIM_RATE = 9;
+
+/** 이보다 가까우면 도착한 것으로 본다. camera.mjs 와 같은 방식이다. */
+const EPSILON = 0.002;
+
+/** 1 - e^(-rate·dt). 프레임 간격이 흔들려도 결과가 같다. */
+function approach(current, target, dt, rate) {
+  return current + (target - current) * (1 - Math.exp(-rate * dt));
+}
+
+export function createStage({ canvas, camera, tiles, wall = '#12100e', reducedMotion = false }) {
   const ctx = canvas.getContext('2d', { alpha: false });
   const view = { width: 0, height: 0, dpr: 1 };
   let world = { tier: 8, locality: 4, baseX: 0n, baseY: 0n, axisBits: 812 };
-  let dim = 0;
+  let axisMask = (1n << 812n) - 1n;
+
+  /**
+   * 지금 어느 미술관을 보고 있는가. 캐시 키의 앞자리다.
+   *
+   * 자리를 옮기면 올라간다. 그래서 옛 미술관의 키와 절대 겹치지 않는다.
+   */
+  let worldId = 0;
+
   let focus = null; // { i, j }
   let velocity = { x: 0, y: 0 };
+
+  // ── 고른 것의 애니메이션 ─────────────────────────────────────────────
+  //
+  // 어둡게 하기와 앞으로 나오기를 둘 다 여기서 몬다. 목표값을 두고 임계 감쇠로
+  // 따라가는 방식이며 카메라와 같다. 그래서 연타와 급반전이 자연히 이어진다.
+  //
+  // 앞으로 나온 정도를 칸마다 따로 둔다. 옮기는 순간에는 **두 칸이 동시에**
+  // 움직여야 하기 때문이다. 떠난 칸은 줄어들고 새 칸은 커진다. 하나만 두면
+  // 떠난 칸이 툭 하고 제자리로 돌아간다.
+  let dimNow = 0;
+  let dimGoal = 0;
+  const lift = new Map(); // "i,j" → { i, j, value }
+
+  const cellId = (i, j) => `${i},${j}`;
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -42,17 +82,31 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
     camera.setViewport(view.width, view.height);
   }
 
-  /** 셀 번호 → 세계 좌표. 축 크기로 감싸므로 경계 처리가 따로 없다. */
+  /**
+   * 셀 번호 → 세계 좌표. 축 크기로 감싸므로 경계 처리가 따로 없다.
+   *
+   * 마스크를 미리 만들어 둔다. 코덱의 `wrap` 은 부를 때마다 `(1n << 3212n) - 1n`
+   * 을 새로 만든다. 층 16 에서는 그 하나가 3212비트다.
+   */
   function coordOf(i, j) {
-    return [
-      wrap(world.baseX + BigInt(i), world.axisBits),
-      wrap(world.baseY + BigInt(j), world.axisBits),
-    ];
+    return [(world.baseX + BigInt(i)) & axisMask, (world.baseY + BigInt(j)) & axisMask];
   }
 
+  /**
+   * 캐시 키. **좌표를 문자열로 만들지 않는다.**
+   *
+   * 예전에는 `층:국소성:x:y` 였다. 층 16 의 좌표는 10진수로 967자이고, 그것을
+   * 한 프레임에 165칸 × 2축 만들면 **5.7ms** 였다 (PC 기준. 프레임 예산의 34%).
+   * 휴대폰에서는 그 몇 배이므로 층 16 이 눈에 보이게 끊겼다. 실측한 값이다.
+   *
+   * 지금은 기준점에 번호를 매기고 그 안의 칸 번호만 쓴다. 같은 일이 **0.000ms**
+   * 다. 자리를 옮기면 worldId 가 올라가므로 옛 미술관의 키와 겹칠 수 없다.
+   *
+   * 잃는 것이 하나 있다. 떠났다가 같은 자리로 돌아오면 캐시가 안 맞는다.
+   * 자리를 옮길 때는 커튼 뒤에서 어차피 다시 그리므로 값이 크지 않다.
+   */
   function keyOf(i, j) {
-    const [x, y] = coordOf(i, j);
-    return tileKey(world.tier, world.locality, x, y);
+    return `${world.tier}@${worldId}:${i}:${j}`;
   }
 
   /**
@@ -86,8 +140,14 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
         const dx = i - camera.x;
         const dy = j - camera.y;
         const cost = Math.hypot(dx, dy) - lead * (dx * ux + dy * uy) * 0.5;
-        const [x, y] = coordOf(i, j);
-        out.push({ key: tileKey(world.tier, world.locality, x, y), i, j, x, y, cost, tier: world.tier, locality: world.locality });
+        out.push({
+          key: keyOf(i, j),
+          i,
+          j,
+          cost,
+          tier: world.tier,
+          locality: world.locality,
+        });
       }
     }
     out.sort((a, b) => a.cost - b.cost);
@@ -114,11 +174,17 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
     return 0;
   }
 
-  function paintCell(item) {
+  /**
+   * 한 칸을 찍는다. grow 는 앞으로 나온 정도(0~1)다.
+   *
+   * 커진 칸은 옆 칸보다 **나중에** 찍어야 한다. 그리는 순서가 화면 중앙부터라서,
+   * 먼저 찍으면 뒤에 오는 옆 칸이 커진 테두리를 덮는다. draw 가 그 순서를 맡는다.
+   */
+  function paintCell(item, grow = 0) {
     const bitmap = tiles.get(item.key);
     if (!bitmap) return false;
 
-    const inner = camera.zoom * (1 - GAP);
+    const inner = camera.zoom * (1 - GAP) * (1 + FOCUS_LIFT * grow);
     const [sx, sy] = worldToScreen(camera, item.i, item.j, view.width, view.height);
     const left = sx - inner / 2;
     const top = sy - inner / 2;
@@ -133,6 +199,52 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
     return true;
   }
 
+  /**
+   * 어둡게 하기와 앞으로 나오기를 한 프레임 나아가게 한다.
+   *
+   * 움직였으면 true. 프레임 루프가 그것으로 다시 그릴지 정한다.
+   */
+  function animate(dt) {
+    // 움직임을 줄여 달라고 한 사람에게는 크기와 어둡기를 곧바로 맞춘다.
+    // 효과 자체를 없애지는 않는다. 고른 것이 어느 것인지는 계속 보여야 한다.
+    if (reducedMotion) {
+      let changed = dimNow !== dimGoal;
+      dimNow = dimGoal;
+      const at = focus ? cellId(focus.i, focus.j) : null;
+      for (const [id, entry] of lift) {
+        if (id !== at) {
+          lift.delete(id);
+          changed = true;
+        } else if (entry.value !== 1) {
+          entry.value = 1;
+          changed = true;
+        }
+      }
+      return changed;
+    }
+
+    let moving = false;
+
+    if (dimNow !== dimGoal) {
+      dimNow = approach(dimNow, dimGoal, dt, DIM_RATE);
+      if (Math.abs(dimNow - dimGoal) < EPSILON) dimNow = dimGoal;
+      moving = true;
+    }
+
+    const here = focus ? cellId(focus.i, focus.j) : null;
+    for (const [id, entry] of lift) {
+      const goal = id === here ? 1 : 0;
+      if (entry.value === goal) continue;
+      entry.value = approach(entry.value, goal, dt, LIFT_RATE);
+      if (Math.abs(entry.value - goal) < EPSILON) entry.value = goal;
+      moving = true;
+      // 다 줄어든 칸은 잊는다. 목록이 자라지 않는다.
+      if (entry.value === 0 && goal === 0) lift.delete(id);
+    }
+
+    return moving;
+  }
+
   return {
     resize,
     get view() {
@@ -142,24 +254,55 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
       return { ...world };
     },
 
+    /**
+     * 다른 자리로 옮긴다.
+     *
+     * worldId 를 올려 캐시 키를 갈아 낸다. 축 마스크도 여기서 한 번만 만든다.
+     * 앞으로 나온 칸의 기록도 버린다. 새 미술관의 같은 번호 칸은 다른 그림이다.
+     */
     setWorld(next) {
       world = { ...world, ...next };
+      axisMask = (1n << BigInt(world.axisBits)) - 1n;
+      worldId++;
+      lift.clear();
     },
 
     setFocus(cell) {
       focus = cell;
+      if (cell && !lift.has(cellId(cell.i, cell.j))) {
+        lift.set(cellId(cell.i, cell.j), { i: cell.i, j: cell.j, value: 0 });
+      }
     },
     get focus() {
       return focus;
     },
 
+    /** 지금 값과 목표값. 검사가 목표값을 본다 (애니메이션 중이라도 뜻이 분명하다). */
     get dim() {
-      return dim;
+      return dimNow;
+    },
+    get dimTarget() {
+      return dimGoal;
     },
 
     setDim(value) {
-      dim = value;
+      dimGoal = value;
     },
+
+    /** 고른 칸이 앞으로 나온 정도 (0~1). */
+    get liftNow() {
+      return focus ? (lift.get(cellId(focus.i, focus.j))?.value ?? 0) : 0;
+    },
+    /** 지금 크기가 움직이고 있는 칸의 수. 옮기는 중에는 둘이다. */
+    get liftCount() {
+      return lift.size;
+    },
+    /** 앞으로 나왔을 때 한 변이 몇 배가 되는가. 검사가 기대값을 만들 때 쓴다. */
+    get liftScale() {
+      return 1 + FOCUS_LIFT;
+    },
+
+    animate,
 
     /** 끌기 속도를 알려 준다. 미리 렌더의 방향이 여기서 나온다. */
     setVelocity(vx, vy) {
@@ -192,23 +335,47 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
 
       const list = wishlist(affordableMargin(prefetch));
       // 순위를 먼저 알린다. 이것이 없으면 캐시가 무엇을 지킬지 모른다.
-      if (request) tiles.want(list);
+      if (request) tiles.want(list, coordOf);
       else tiles.keep(list);
 
+      const here = focus ? cellId(focus.i, focus.j) : null;
+
+      // 1. 평범한 칸. 커지고 있는 칸은 건너뛴다.
       let missing = 0;
       for (const item of list) {
+        if (lift.size > 0 && lift.has(cellId(item.i, item.j))) continue;
         if (!paintCell(item)) missing++;
       }
 
-      if (dim > 0.01 && focus) {
-        ctx.fillStyle = `rgba(18,16,14,${DIM_ALPHA * dim})`;
+      // 2. 커지고 있는 칸을 위에 얹는다. 작은 것부터 찍어 고른 것이 가장 위에 온다.
+      //    떠난 칸은 아직 줄어드는 중이므로 여기에 함께 있다.
+      //
+      //    여기서는 missing 을 세지 않는다. missing 은 "다시 그려야 하는가" 를
+      //    정하는 값이고, 이 칸들은 목록(wishlist) 밖일 수도 있다. 목록 밖의
+      //    칸은 아무도 요청하지 않으므로 세면 영원히 다시 그리게 된다.
+      //    타일이 도착하면 tiles 의 onArrive 가 어차피 다시 그리게 한다.
+      if (lift.size > 0) {
+        const rising = [];
+        for (const entry of lift.values()) {
+          if (entry.i === focus?.i && entry.j === focus?.j) continue;
+          rising.push(entry);
+        }
+        rising.sort((a, b) => a.value - b.value);
+        for (const entry of rising) {
+          paintCell({ key: keyOf(entry.i, entry.j), i: entry.i, j: entry.j }, entry.value);
+        }
+      }
+
+      // 3. 어둡게 하고, 고른 것만 그 위에 다시 찍는다.
+      if (dimNow > 0.004 && focus) {
+        ctx.fillStyle = `rgba(18,16,14,${DIM_ALPHA * dimNow})`;
         ctx.fillRect(0, 0, view.width, view.height);
-        const [x, y] = coordOf(focus.i, focus.j);
-        paintCell({
-          key: tileKey(world.tier, world.locality, x, y),
-          i: focus.i,
-          j: focus.j,
-        });
+      }
+      if (focus) {
+        paintCell(
+          { key: keyOf(focus.i, focus.j), i: focus.i, j: focus.j },
+          lift.get(here)?.value ?? 0,
+        );
       }
 
       return missing;
@@ -233,7 +400,7 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e' }) {
             resolve(need.length);
             return;
           }
-          tiles.want(list);
+          tiles.want(list, coordOf);
           requestAnimationFrame(tick);
         };
         tick();

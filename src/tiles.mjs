@@ -10,9 +10,8 @@
 const CACHE_MAX = 180; // 비트맵 하나가 약 256KB. 180장이면 46MB 쯤
 const IN_FLIGHT_MAX = 6; // 동시에 워커에 맡기는 개수
 
-export function tileKey(tier, locality, x, y) {
-  return `${tier}:${locality}:${x}:${y}`;
-}
+// 키는 stage 가 만든다. 좌표 문자열을 쓰지 않는 이유는 stage.mjs 의 keyOf 에 있다.
+// 여기서는 키를 불투명한 문자열로만 다룬다.
 
 export function createTiles({ workerCount = 2, cacheMax = CACHE_MAX, onArrive } = {}) {
   const cache = new Map(); // key → ImageBitmap  (Map 의 삽입 순서로 LRU)
@@ -101,8 +100,13 @@ export function createTiles({ workerCount = 2, cacheMax = CACHE_MAX, onArrive } 
    *
    * 이미 있거나 진행 중인 것은 건너뛴다. 동시 처리 상한까지만 맡긴다.
    * 남은 것은 다음 프레임에 다시 알려 오면 된다. 대기열을 길게 쌓지 않는다.
+   *
+   * `coordOf(i, j)` 를 함께 받는다. **목록에는 좌표가 없다.**
+   *   층 16 의 좌표는 3212비트다. 165칸 전부에 대해 미리 만들면 프레임마다
+   *   큰 BigInt 를 330개 버리게 된다. 실제로 워커에 보내는 것은 한 프레임에
+   *   여섯 개 이하이므로, 보낼 것만 그때 계산한다.
    */
-  function want(list) {
+  function want(list, coordOf) {
     keep(list);
     let room = IN_FLIGHT_MAX - inFlight.size;
     if (room <= 0) return 0;
@@ -113,17 +117,20 @@ export function createTiles({ workerCount = 2, cacheMax = CACHE_MAX, onArrive } 
       const { key } = item;
       if (cache.has(key) || inFlight.has(key)) continue;
 
+      const [x, y] = coordOf(item.i, item.j);
       inFlight.set(key, generation);
       const worker = workers[nextWorker];
       nextWorker = (nextWorker + 1) % workers.length;
+      // 16진수로 보낸다. 2의 거듭제곱 진법은 비트를 옮기기만 하므로 자릿수에
+      // 선형이다. 10진수는 나눗셈이라 층 16 에서 눈에 보일 만큼 느리다.
       worker.postMessage({
         type: 'render',
         id: ++sequence,
         key,
         tier: item.tier,
         locality: item.locality,
-        x: String(item.x),
-        y: String(item.y),
+        x: x.toString(16),
+        y: y.toString(16),
       });
       room--;
       issued++;

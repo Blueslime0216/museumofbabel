@@ -5,8 +5,11 @@
 //   메인 스레드에서 돌리면 렌더가 프레임을 물어서 패닝이 끊긴다.
 //   프레임 예산으로 쪼개는 방법은 끊김을 잘게 나누는 것이고, 워커는 없애는 것이다.
 //
-// 좌표는 문자열로 받는다. BigInt 도 구조화 복제가 되지만, 문자열이면
-// 로그와 캐시 키가 그대로 읽힌다.
+// 좌표는 **16진수 문자열**로 받는다.
+//   BigInt 도 구조화 복제가 되지만 문자열이면 로그가 그대로 읽힌다.
+//   10진수가 아니라 16진수인 이유. 2의 거듭제곱 진법은 비트를 옮기기만 하므로
+//   자릿수에 선형이다. 10진수는 반복 나눗셈이다. 층 16 의 좌표는 3212비트이고,
+//   그 차이가 실측으로 보였다 (10진수 967자 · 0.017ms 대 16진수 803자 · 0.001ms).
 
 import {
   CANVAS,
@@ -40,7 +43,7 @@ self.onmessage = async event => {
     const { spec, mix, frame } = contextFor(tier, locality);
     // 순수 계산 시간만 잰다. 비트맵으로 옮기는 비용은 따로다.
     const started = performance.now();
-    const code = coordinatesToCode(BigInt(x), BigInt(y), mix, spec.axisBits);
+    const code = coordinatesToCode(BigInt(`0x${x}`), BigInt(`0x${y}`), mix, spec.axisBits);
     renderCode(spec, code, frame);
     const computeMs = performance.now() - started;
 

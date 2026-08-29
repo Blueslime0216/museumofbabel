@@ -164,6 +164,84 @@ for (const size of ['mobile', 'desktop']) {
   await page.close();
 }
 
+// ── 층마다 ───────────────────────────────────────────────────────────────
+//
+// 층 16 이 눈에 보이게 끊긴다는 신고가 있었다. 원인은 캐시 키였다.
+// 좌표를 10진수 문자열로 만들고 있었고, 층 16 의 좌표는 967자다.
+// 한 프레임에 165칸 × 2축이면 5.7ms 이며 프레임 예산의 3분의 1이다.
+// 고친 뒤에도 그대로인지 층마다 재서 남긴다.
+
+for (const tier of [4, 8, 16]) {
+  const page = await openPage('desktop');
+  await settled(page);
+  await page.waitForTimeout(300);
+
+  await page.evaluate(t => window.__museum.jumpRandom(t), tier);
+  await page.waitForFunction(() => window.__museum.curtain.phase !== 'clear', null, {
+    timeout: 20000,
+  });
+
+  // 개방(줌아웃) 동안의 프레임. 이때 매 프레임 전체를 다시 그린다.
+  //
+  // 개방 단계만 잰다. 암전과 대기를 분모에 넣으면 fps 가 낮게 나와 거짓말을 한다.
+  await page.evaluate(() => {
+    window.__open = { frames: 0, from: 0, to: 0 };
+    const tick = () => {
+      if (window.__museum.curtain.phase === 'open') {
+        if (!window.__open.from) window.__open.from = performance.now();
+        window.__open.frames++;
+        window.__open.to = performance.now();
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await settled(page);
+  await page.waitForTimeout(400);
+  const open = await page.evaluate(() => window.__open);
+  const openMs = Math.max(1, Math.round(open.to - open.from));
+
+  note(
+    `층 ${tier} 인트로 개방`,
+    `${Math.round((open.frames * 1000) / openMs)} fps`,
+    `${open.frames}프레임 / ${openMs}ms`,
+  );
+
+  // 끌기. 여기가 키 비용이 가장 아프게 드러나는 자리다.
+  await page.evaluate(() => {
+    window.__frames = 0;
+    const tick = () => {
+      window.__frames++;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await page.mouse.move(640, 430);
+  await page.mouse.down();
+  await page.evaluate(() => {
+    window.__frames = 0;
+  });
+  const dragStarted = Date.now();
+  for (let i = 1; i <= 40; i++) {
+    await page.mouse.move(640 - i * 8, 430 - i * 4);
+    await page.waitForTimeout(12);
+  }
+  const dragMs = Date.now() - dragStarted;
+  const dragFrames = await page.evaluate(() => window.__frames);
+  await page.mouse.up();
+
+  note(
+    `층 ${tier} 드래그 중 프레임`,
+    `${Math.round((dragFrames * 1000) / dragMs)} fps`,
+    `${dragFrames}프레임 / ${dragMs}ms`,
+  );
+
+  const stats = await page.evaluate(() => window.__museum.tiles);
+  note(`층 ${tier} 전시물 하나 렌더`, `${stats.avgMs.toFixed(2)} ms`, `층과 무관해야 한다`);
+
+  await page.close();
+}
+
 // ── 투영 ─────────────────────────────────────────────────────────────────
 
 {
