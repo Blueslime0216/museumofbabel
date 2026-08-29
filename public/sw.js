@@ -15,7 +15,7 @@
 //   파비콘은 이름이 그대로이므로 cache-first 에 걸려 옛 것이 영원히 남는다.
 //   실제로 아이콘을 갈아 끼우면서 이 함정을 확인했다.
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `museum-of-babel-${VERSION}`;
 
 self.addEventListener('install', () => {
@@ -43,14 +43,24 @@ async function cacheFirst(request) {
   return response;
 }
 
+/**
+ * HTML 은 경로만으로 저장한다. **쿼리를 키에 넣으면 안 된다.**
+ *
+ * 좌표가 `?a=` 로 들어가면서 URL 이 작품마다 달라졌다. 그런데 돌아오는 HTML 은
+ * 어느 좌표로 들어와도 똑같은 한 장이다. 요청을 그대로 키로 쓰면 관람한 작품
+ * 수만큼 같은 10KB 가 쌓인다. 예전에는 좌표가 `#` 에 있어서 URL 이 하나였다.
+ */
+const pageKey = request => new URL(request.url).pathname;
+
 async function networkFirst(request) {
   const cache = await caches.open(CACHE);
+  const key = pageKey(request);
   try {
     const response = await fetch(request);
-    if (response.ok) cache.put(request, response.clone());
+    if (response.ok) cache.put(key, response.clone());
     return response;
   } catch (error) {
-    const hit = await cache.match(request);
+    const hit = await cache.match(key);
     if (hit) return hit;
     throw error;
   }
@@ -62,6 +72,10 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(request.url);
   if (url.origin !== location.origin) return;
+
+  // 함수는 건드리지 않는다. 링크 카드용이고 관람에는 쓰이지 않는다.
+  // 오프라인에서 필요하지도 않고, 좌표마다 다른 URL 이라 캐시를 부풀린다.
+  if (url.pathname.startsWith('/api/')) return;
 
   const wantsHtml = request.mode === 'navigate' || request.destination === 'document';
   event.respondWith(wantsHtml ? networkFirst(request) : cacheFirst(request));

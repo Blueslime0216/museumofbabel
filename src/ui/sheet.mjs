@@ -15,6 +15,7 @@
 import { CANVAS, formatHash, shortenNumber, toBase36 } from '../codec.mjs';
 import { describe } from '../label.mjs';
 import { downloadArtwork } from '../download.mjs';
+import { shareUrlFor } from '../hash.mjs';
 import { t } from '../i18n/index.mjs';
 
 const DEBUG_HOLD_MS = 700;
@@ -194,7 +195,8 @@ export function createSheet({ toast, onShow }) {
 
   $('btn-copy').addEventListener('click', async () => {
     if (!current) return;
-    const url = `${location.origin}${location.pathname}${current.hash}`;
+    // `?a=` 형태로 준다. 이 형태만 링크 카드에 그림이 뜬다 (hash.mjs 참조).
+    const url = shareUrlFor(current);
     try {
       await navigator.clipboard.writeText(url);
       toast(t('toast.copied'));

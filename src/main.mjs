@@ -16,7 +16,7 @@ import { createCurtainState, attachCurtain, PHASE } from './curtain.mjs';
 import { createTiles } from './tiles.mjs';
 import { createStage } from './stage.mjs';
 import { createInput } from './input.mjs';
-import { readState, createHashWriter } from './hash.mjs';
+import { readState, readLegacyHash, createHashWriter } from './hash.mjs';
 import { applyTheme } from './theme.mjs';
 import { createToasts } from './ui/toast.mjs';
 import { createSheet } from './ui/sheet.mjs';
@@ -318,16 +318,23 @@ document.getElementById('btn-floor').addEventListener('click', () => floorPicker
 document.getElementById('btn-language').addEventListener('click', () => languagePicker.open());
 
 window.addEventListener('resize', resize);
+
+// 옛 `#` 링크를 주소창에 붙였을 때만 일어난다. 표준형은 `?a=` 이고 그것을
+// 붙이면 페이지가 새로 뜨므로 이벤트가 필요 없다.
 window.addEventListener('hashchange', () => {
-  const next = readState();
-  if (!next.fromUrl) return;
+  const next = readLegacyHash();
+  if (!next) return;
   const same =
     next.tier === state.tier &&
     next.locality === state.locality &&
     next.x === state.x &&
     next.y === state.y;
-  if (same) return;
-  goto(next);
+  // 같은 자리라면 옮길 것이 없다. 주소창만 표준형으로 정리한다.
+  if (same) {
+    hash.normalize(state);
+    return;
+  }
+  goto(next); // goto 안의 hash.set 이 해시를 지우고 ?a= 로 바꾼다
 });
 
 // ── 프레임 루프 ──────────────────────────────────────────────────────────

@@ -55,6 +55,14 @@ async function openPage(size) {
 const settled = page =>
   page.waitForFunction(() => window.__museum.curtain.open >= 0.999, null, { timeout: 25000 });
 
+/**
+ * 주소창에 적힌 주소. 표준형은 `?a=v1.8.4.…` 이다 (hash.mjs 참조).
+ *
+ * `#` 을 뗀 형태로 돌려준다. 시트가 보여 주는 주소와 견주기 쉽게.
+ */
+const addressInUrl = page =>
+  page.evaluate(() => new URLSearchParams(location.search).get('a') ?? '');
+
 /** 자리 옮김을 기다린다. 커튼이 움직이기 시작하는 것을 먼저 본다. */
 async function traveled(page) {
   await page.waitForFunction(() => window.__museum.curtain.phase !== 'clear', null, {
@@ -536,30 +544,30 @@ for (const size of ['mobile', 'desktop']) {
   check('지금 층이 표시된다', floors.filter(f => f.current).length === 1);
 
   // 1층으로 옮긴다. 자리도 바뀌어야 한다.
-  const before = await page.evaluate(() => location.hash);
+  const before = await addressInUrl(page);
   await page.click('#floor-list .lang[data-tier="4"]');
   await traveled(page);
-  const afterFloor = await page.evaluate(() => ({
-    tier: window.__museum.state.tier,
-    hash: location.hash,
-  }));
+  const afterFloor = {
+    tier: await page.evaluate(() => window.__museum.state.tier),
+    address: await addressInUrl(page),
+  };
   check('층을 고르면 그 층으로 간다', afterFloor.tier === 4, `tier ${afterFloor.tier}`);
-  check('층을 옮기면 자리도 바뀐다', afterFloor.hash !== before);
+  check('층을 옮기면 자리도 바뀐다', afterFloor.address !== before);
   check(
     '낮은 층은 주소가 짧다',
-    afterFloor.hash.length < before.length,
-    `${before.length}자 → ${afterFloor.hash.length}자`,
+    afterFloor.address.length < before.length,
+    `${before.length}자 → ${afterFloor.address.length}자`,
   );
 
   // 무작위 버튼은 층을 유지한다
   await page.click('#btn-random');
   await traveled(page);
-  const afterRandom = await page.evaluate(() => ({
-    tier: window.__museum.state.tier,
-    hash: location.hash,
-  }));
+  const afterRandom = {
+    tier: await page.evaluate(() => window.__museum.state.tier),
+    address: await addressInUrl(page),
+  };
   check('무작위는 지금 층 안에서 옮긴다', afterRandom.tier === 4, `tier ${afterRandom.tier}`);
-  check('무작위가 자리를 바꾼다', afterRandom.hash !== afterFloor.hash);
+  check('무작위가 자리를 바꾼다', afterRandom.address !== afterFloor.address);
 
   // 찾기의 층 선택
   await page.click('#btn-search');
@@ -671,14 +679,18 @@ for (const size of ['mobile', 'desktop']) {
   await page.keyboard.press('Escape');
   await page.click('#btn-random');
   await traveled(page);
-  const elsewhere = await page.evaluate(() => location.hash);
-  check('무작위 점프가 자리를 옮긴다', elsewhere !== chosen);
+  const elsewhere = await addressInUrl(page);
+  check('무작위 점프가 자리를 옮긴다', elsewhere !== chosen.replace(/^#/, ''));
 
   await page.click('#btn-search');
   await page.setInputFiles('#search-file', saved);
   await traveled(page);
-  const returned = await page.evaluate(() => location.hash);
-  check('내려받아 올리면 제자리로 온다', returned === chosen, `${returned.slice(0, 24)}…`);
+  const returned = await addressInUrl(page);
+  check(
+    '내려받아 올리면 제자리로 온다',
+    returned === chosen.replace(/^#/, ''),
+    `${returned.slice(0, 24)}…`,
+  );
 
   // 읽을 수 없는 입력은 알리고 모달을 닫지 않는다
   await page.click('#btn-search');
@@ -758,6 +770,62 @@ for (const size of ['mobile', 'desktop']) {
   );
 
   check('층을 바꿔 찾는 동안 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
+  await page.close();
+}
+
+// ── 5.5 — 주소창은 `?a=` 하나로 통일된다 ─────────────────────────────────
+//
+// 링크 카드에 그림이 뜨려면 주소가 서버까지 가야 한다. 프래그먼트는 서버로
+// 가지 않으므로 표준형을 쿼리로 옮겼다. 둘을 같이 남기면 주소가 두 배로
+// 길어지므로 해시는 반드시 사라져야 한다.
+
+{
+  const page = await openPage('desktop');
+  await settled(page);
+  await page.waitForTimeout(300);
+
+  const url = await page.evaluate(() => location.href);
+  check('주소창이 ?a= 형태다', /\?a=v1\.\d+\.\d+\./.test(url), url.slice(0, 60));
+  check('주소창에 해시가 없다', !url.includes('#'), url.slice(-40));
+
+  // 복사 버튼이 주는 것이 바로 그 형태여야 한다
+  await page.mouse.click(500, 420);
+  await page.waitForTimeout(800);
+  const shown = await page.evaluate(() => document.getElementById('address').textContent);
+  const copied = await page.evaluate(() => {
+    // 클립보드 권한 없이도 확인하려고 가로챈다
+    let taken = null;
+    const real = navigator.clipboard.writeText.bind(navigator.clipboard);
+    navigator.clipboard.writeText = text => {
+      taken = text;
+      return Promise.resolve();
+    };
+    document.getElementById('btn-copy').click();
+    navigator.clipboard.writeText = real;
+    return taken;
+  });
+  check(
+    '복사 버튼이 ?a= 링크를 준다',
+    copied?.includes(`?a=${shown.replace(/^#/, '')}`),
+    (copied ?? '없다').slice(0, 60),
+  );
+
+  // 옛 `#` 링크를 붙이면 그 자리로 가고 주소창이 정리된다
+  const legacy = await page.evaluate(() => document.getElementById('address').textContent);
+  await page.evaluate(() => window.__museum.jumpRandom());
+  await traveled(page);
+  await page.evaluate(h => {
+    location.hash = h;
+  }, legacy);
+  await traveled(page);
+  const after = await page.evaluate(() => location.href);
+  check(
+    '옛 # 링크가 ?a= 로 바뀐다',
+    !after.includes('#') && after.includes(`?a=${legacy.replace(/^#/, '')}`),
+    after.slice(-50),
+  );
+
+  check('주소 작업에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
   await page.close();
 }
 

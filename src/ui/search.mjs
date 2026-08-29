@@ -37,7 +37,18 @@ export function parseDestination(text, { tier = DEFAULT_TIER } = {}) {
   const trimmed = String(text ?? '').trim();
   if (!trimmed) return null;
 
-  // 전체 URL 이면 해시만 떼어 낸다
+  // 전체 URL 이면 주소만 떼어 낸다. 두 형태를 다 받는다.
+  //   지금 형태  https://…/?a=v1.8.4.…
+  //   옛 형태    https://…/#v1.8.4.…
+  const query = /[?&]a=([^&#\s]+)/.exec(trimmed);
+  if (query) {
+    try {
+      return parseHash(`#${decodeURIComponent(query[1]).replace(/^#/, '')}`, axisBitsFor);
+    } catch {
+      return null;
+    }
+  }
+
   const hashAt = trimmed.indexOf('#');
   const candidate = hashAt >= 0 ? trimmed.slice(hashAt) : trimmed;
 
