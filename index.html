@@ -233,6 +233,19 @@
           <div class="segmented-row" id="search-floor-row"></div>
         </div>
 
+        <!--
+          어느 전시실에서 찾을지. 기본값은 "어디든" 이다.
+          방을 고르면 그 방의 읽는 방식으로 투영하고, 좌표도 그 방 안으로 옮긴다.
+          이름 대신 번호를 쓴다. 작품 딸림표가 같은 번호를 보여 주므로,
+          걸어 다니다 마음에 든 방의 번호를 적어 와서 그 방 안에서 찾을 수 있다.
+        -->
+        <div class="segmented" id="search-rooms" role="group" aria-labelledby="search-room-label">
+          <span class="segmented-label" id="search-room-label" data-i18n="search.room">
+            Room
+          </span>
+          <div class="segmented-row wrap" id="search-room-row"></div>
+        </div>
+
         <button class="dropzone" id="dropzone" data-busy="0" data-over="0">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 16V4M12 4L7.5 8.5M12 4l4.5 4.5" />

@@ -739,6 +739,38 @@ for (const size of ['mobile', 'desktop']) {
     (await page.evaluate(() => window.__museum.state.tier)) === 4,
   );
 
+  // 찾기의 전시실 선택
+  //
+  // 투영까지 돌리지는 않는다(층 4 도 몇 초 걸린다). 고르는 부분만 본다.
+  // "그 방에 정말 떨어지는가" 는 코덱 본체의 test/project.test.mjs 가 방 31개
+  // 전부에 대해 좌표와 픽셀을 직접 확인한다. 여기서 겹쳐 볼 이유가 없다.
+  await page.click('#btn-search');
+  await page.waitForTimeout(250);
+
+  const rooms = await page.evaluate(() => ({
+    total: window.__museum.rooms.ROOMS.length,
+    chips: [...document.querySelectorAll('#search-room-row .segment')].map(b => b.dataset.room),
+    current: document.querySelector('#search-room-row .segment[aria-current="true"]')?.dataset
+      .room,
+  }));
+
+  check(
+    '전시실 선택이 "어디든" + 방 전부다',
+    rooms.chips.length === rooms.total + 1 && rooms.chips[0] === 'any',
+    `${rooms.chips.length}칸 / 방 ${rooms.total}개`,
+  );
+  check('전시실 기본값이 "어디든" 이다', rooms.current === 'any', String(rooms.current));
+
+  await page.click('#search-room-row .segment[data-room="4"]');
+  await page.waitForTimeout(100);
+  check(
+    '전시실을 누르면 그 방이 골라진다',
+    (await page.evaluate(
+      () =>
+        document.querySelector('#search-room-row .segment[aria-current="true"]')?.dataset.room,
+    )) === '4',
+  );
+
   check('층 작업에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
   await page.close();
 }
@@ -909,6 +941,27 @@ for (const size of ['mobile', 'desktop']) {
     (await page.evaluate(() => window.__museum.state.tier)) === 4,
     `tier ${await page.evaluate(() => window.__museum.state.tier)}`,
   );
+
+  // 전시실을 골라서 찾으면 **정말로** 그 방 안의 자리를 준다.
+  //
+  // 여기가 이 기능의 알맹이다. room 을 워커까지 못 넘기면 아무 말 없이 무시되고
+  // "고른 방에서 찾았다" 가 조용히 거짓이 된다. 그래서 화면에서 끝까지 확인한다.
+  const WANTED = 7;
+  await page.click('#btn-search');
+  await page.waitForTimeout(250);
+  await page.click('#search-floor-row .segment[data-tier="4"]');
+  await page.click(`#search-room-row .segment[data-room="${WANTED}"]`);
+  await page.setInputFiles('#search-file', plain);
+  await page.waitForSelector('#compare:not([hidden])', { timeout: 60000 });
+  await page.click('#btn-go');
+  await traveled(page);
+
+  // state 는 좌표를 문자열로 내보낸다(BigInt 는 직렬화되지 않는다). 되돌려서 쓴다.
+  const landed = await page.evaluate(() => {
+    const m = window.__museum;
+    return m.rooms.roomOf(BigInt(m.state.x), BigInt(m.state.y));
+  });
+  check('고른 전시실 안의 자리를 준다', landed === WANTED, `방 ${landed} (원한 것 ${WANTED})`);
 
   check('층을 바꿔 찾는 동안 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
   await page.close();

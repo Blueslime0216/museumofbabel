@@ -46,6 +46,8 @@ export default {
   "search.upload": "絵をアップロード",
   "search.uploadNote": "いちばん近い場所まで歩きます",
   "search.floor": "階",
+  "search.room": "展示室",
+  "search.roomAny": "どこでも",
   "search.or": "または",
   "search.yours": "あなたの絵",
   "search.nearest": "いちばん近い絵",
@@ -62,6 +64,7 @@ export default {
   "toast.notPicture": "絵ではありません",
   "toast.badPicture": "開けない絵です",
   "toast.projectFailed": "その絵から場所を見つけられませんでした",
+  "toast.roomUnreachable": "その展示室では場所を見つけられませんでした",
   "toast.brokenUrl": "読めないアドレスなので別の場所から始めます",
   "toast.offline": "ネットワークがなくても見られます"
 };

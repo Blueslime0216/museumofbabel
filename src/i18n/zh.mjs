@@ -47,6 +47,8 @@ export default {
   "search.upload": "上传画作",
   "search.uploadNote": "带你走到最相近的位置",
   "search.floor": "层",
+  "search.room": "展厅",
+  "search.roomAny": "任意",
   "search.or": "或者",
   "search.yours": "你的画",
   "search.nearest": "最相近的画",
@@ -63,6 +65,7 @@ export default {
   "toast.notPicture": "这不是一幅画",
   "toast.badPicture": "这幅画打不开",
   "toast.projectFailed": "无法从这幅画找到位置",
+  "toast.roomUnreachable": "在那个展厅里没有找到位置",
   "toast.brokenUrl": "地址读不出来，改从别处开始",
   "toast.offline": "没有网络也能看"
 };

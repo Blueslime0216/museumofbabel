@@ -21,6 +21,7 @@ import {
 } from '../codec.mjs';
 import { readAddress } from '../png.mjs';
 import { ARTWORK_FLOORS } from '../floors.mjs';
+import { ROOMS } from '../codec.mjs';
 import { t } from '../i18n/index.mjs';
 
 
@@ -90,9 +91,19 @@ export function createSearch({ toast, onGo, getWorld }) {
   const afterCanvas = $('compare-after');
   const goButton = $('btn-go');
   const floorRow = $('search-floor-row');
+  const roomRow = $('search-room-row');
 
   /** 어느 층에서 찾을지. 열 때 지금 층으로 맞춘다. */
   let searchTier = getWorld().tier;
+
+  /**
+   * 어느 전시실에서 찾을지. null 이면 "어디든" 이다.
+   *
+   * 기본값을 "어디든" 으로 둔다. 방을 강제하면 그 방의 읽는 방식으로 투영해야
+   * 하므로 결과가 반드시 그 방의 분위기를 띤다. 올린 그림을 가장 잘 닮은 것을
+   * 원하는 사람에게 그것을 몰래 씌우면 안 된다.
+   */
+  let searchRoom = null;
 
   function renderFloors() {
     // 로비는 뺀다. 찾기는 "이 그림에 가까운 작품" 을 찾는 것이고
@@ -115,6 +126,46 @@ export function createSearch({ toast, onGo, getWorld }) {
     );
   }
 
+  /**
+   * 전시실 고르기. 이름 대신 번호를 쓴다.
+   *
+   * 31개 x 5개 언어를 미감이 확정되기 전에 번역할 이유가 없다. 작품 딸림표가
+   * 같은 번호("17 / 31")를 보여 주므로 번호만으로 이어진다. 걸어 다니다 마음에
+   * 든 방의 번호를 적어 와서 그 방 안에서 찾는 것이 이 기능의 쓰임새다.
+   */
+  function renderRooms() {
+    const any = document.createElement('button');
+    any.type = 'button';
+    any.className = 'segment';
+    any.dataset.room = 'any';
+    if (searchRoom === null) any.setAttribute('aria-current', 'true');
+    any.append(
+      Object.assign(document.createElement('span'), { textContent: t('search.roomAny') }),
+    );
+
+    roomRow.replaceChildren(
+      any,
+      ...ROOMS.map((_, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'segment';
+        button.dataset.room = String(index);
+        if (index === searchRoom) button.setAttribute('aria-current', 'true');
+        button.append(
+          Object.assign(document.createElement('span'), { textContent: String(index + 1) }),
+        );
+        return button;
+      }),
+    );
+  }
+
+  /** 고른 것이 바뀌면 앞서 찾아 둔 결과는 뜻이 없다. */
+  function invalidateFound() {
+    compare.hidden = true;
+    found = null;
+    goButton.textContent = t('common.go');
+  }
+
   floorRow.addEventListener('click', event => {
     const button = event.target.closest('.segment');
     if (!button) return;
@@ -122,15 +173,24 @@ export function createSearch({ toast, onGo, getWorld }) {
     if (next === searchTier) return;
     searchTier = next;
     renderFloors();
-
-    // 층이 바뀌면 앞서 찾아 둔 결과는 뜻이 없다.
-    compare.hidden = true;
-    found = null;
-    goButton.textContent = t('common.go');
+    invalidateFound();
 
     // **올린 그림이 있으면 그 자리에서 새 층을 다시 찾는다.**
     //   다시 올리게 하면 "같은 그림이 층마다 어디에 있나" 를 견주기가 번거롭다.
     //   층을 눌러 보는 것 자체가 그 비교다.
+    if (picture) project(picture);
+  });
+
+  roomRow.addEventListener('click', event => {
+    const button = event.target.closest('.segment');
+    if (!button) return;
+    const next = button.dataset.room === 'any' ? null : Number(button.dataset.room);
+    if (next === searchRoom) return;
+    searchRoom = next;
+    renderRooms();
+    invalidateFound();
+
+    // 층과 같은 이유로 곧바로 다시 찾는다. 방을 눌러 보는 것이 곧 비교다.
     if (picture) project(picture);
   });
 
@@ -178,13 +238,21 @@ export function createSearch({ toast, onGo, getWorld }) {
       stopWaiting();
 
       if (message.type !== 'projected') {
-        toast(t('toast.projectFailed'));
+        // 고른 방에 떨어지는 주소를 못 찾은 경우만 따로 알린다.
+        // 다른 방을 고르거나 "어디든" 으로 두면 된다는 것을 알려야 한다.
+        toast(
+          message.message === 'room-unreachable'
+            ? t('toast.roomUnreachable')
+            : t('toast.projectFailed'),
+        );
         return;
       }
 
-      // 기다리는 동안 층이 바뀌었다. 이 결과는 옛 층의 것이다.
-      // 화면에 보여 주지 않고 새 층으로 다시 찾는다.
-      if (message.tier !== searchTier) {
+      // 기다리는 동안 고른 것이 바뀌었다. 이 결과는 옛 조건의 것이다.
+      // 화면에 보여 주지 않고 새 조건으로 다시 찾는다.
+      const stale =
+        message.tier !== searchTier || (searchRoom !== null && message.room !== searchRoom);
+      if (stale) {
         message.before?.close?.();
         message.after?.close?.();
         if (picture) project(picture);
@@ -226,7 +294,11 @@ export function createSearch({ toast, onGo, getWorld }) {
   function open() {
     reset();
     searchTier = getWorld().tier;
+    // 방은 지금 서 있는 방으로 맞추지 않는다. 열 때마다 "어디든" 이다.
+    // 걸어 들어간 방이 곧 찾고 싶은 방이라고 단정할 수 없다.
+    searchRoom = null;
     renderFloors();
+    renderRooms();
     scrim.hidden = false;
     // 휴대폰에서 키보드가 올라오면 화면이 좁아진다. 자동으로 focus 하지 않는다.
     if (matchMedia('(pointer: fine)').matches) input.focus();
@@ -272,6 +344,7 @@ export function createSearch({ toast, onGo, getWorld }) {
         id: ++sequence,
         tier: searchTier,
         locality: getWorld().locality,
+        room: searchRoom,
         bitmap,
       },
       [bitmap],

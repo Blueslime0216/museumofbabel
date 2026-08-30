@@ -308,7 +308,7 @@ export function writeBlock(
  *
  * 자리값은 BLOCK_FIELDS 의 순서를 그대로 따른다. buildDigitPlan 과 같은 규약이다.
  */
-function packBlock(spec, fields, index) {
+export function packBlock(spec, fields, index) {
   let value = 0;
   let place = 1;
   for (const field of spec.blockFields) {
@@ -316,6 +316,28 @@ function packBlock(spec, fields, index) {
     place *= field.radix;
   }
   return value;
+}
+
+/**
+ * packBlock 의 역함수. 25비트 정수를 블록 하나의 필드로 흩는다.
+ *
+ * 투영기가 쓴다. 픽셀아트 방은 블록 평균 RGB 를 그대로 담고, 밀기는 블록 한 개의
+ * 값을 훑는다. 둘 다 "정수 하나 → 필드"가 필요하다.
+ */
+export function unpackBlock(spec, fields, index, value) {
+  let rest = value;
+  for (const field of spec.blockFields) {
+    fields[field.name][index] = rest % field.radix;
+    rest = (rest / field.radix) | 0;
+  }
+  return fields;
+}
+
+/** 블록 한 개가 담을 수 있는 값의 개수. 밀기가 훑을 범위다. */
+export function blockValueCount(spec) {
+  let count = 1;
+  for (const field of spec.blockFields) count *= field.radix;
+  return count;
 }
 
 /**
@@ -387,8 +409,11 @@ function renderPixelArt(spec, fields, frame) {
  *
  * 폐루프의 방향을 뒤집는 것이므로, 번짐이 좌상 방향으로 흐른다.
  * gatherReferences 와 대칭이며 같은 버퍼를 쓴다.
+ *
+ * 투영기도 이것을 쓴다. 디코더와 투영기가 **같은 참조**를 보지 않으면
+ * decode(project(img)) 가 미리보기와 어긋난다.
  */
-function gatherReferencesReversed(luma, px0, py0, B, base, top, topRight, left) {
+export function gatherReferencesReversed(luma, px0, py0, B, base, top, topRight, left) {
   const below = py0 + B;
   const right = px0 + B;
 

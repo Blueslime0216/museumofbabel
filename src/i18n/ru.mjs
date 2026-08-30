@@ -47,6 +47,8 @@ export default {
   "search.upload": "Загрузить картину",
   "search.uploadNote": "мы дойдём до ближайшего адреса",
   "search.floor": "Этаж",
+  "search.room": "Зал",
+  "search.roomAny": "Любой",
   "search.or": "или",
   "search.yours": "ваша",
   "search.nearest": "ближайшая",
@@ -63,6 +65,7 @@ export default {
   "toast.notPicture": "Это не картина",
   "toast.badPicture": "Эту картину не удалось открыть",
   "toast.projectFailed": "Не удалось найти место по этой картине",
+  "toast.roomUnreachable": "В этом зале ничего не нашлось",
   "toast.brokenUrl": "Адрес не удалось прочитать, начинаем с другого места",
   "toast.offline": "Смотреть можно и без сети"
 };

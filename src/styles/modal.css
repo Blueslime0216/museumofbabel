@@ -376,6 +376,21 @@ body[data-sheet='expanded'] .controls {
   display: flex;
   gap: 6px;
 }
+/*
+  전시실 고르기는 32칸이다. 한 줄에 다 못 넣으므로 접어 내린다.
+  칸을 늘리지 않고(flex: none) 고정 폭으로 두어 격자처럼 보이게 한다.
+  층 고르기는 5칸이라 그대로 한 줄을 채운다.
+*/
+.segmented-row.wrap {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.segmented-row.wrap .segment {
+  flex: none;
+  min-width: 34px;
+  min-height: 34px;
+  font-size: 12.5px;
+}
 .segment {
   flex: 1;
   display: grid;

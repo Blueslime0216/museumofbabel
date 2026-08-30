@@ -41,6 +41,9 @@ export default {
 
   "search.title": "작품 찾기",
   "search.floor": "층",
+  // 전시실은 번호로만 고른다. 딸림표도 같은 번호를 보여 준다.
+  "search.room": "전시실",
+  "search.roomAny": "어디든",
   "search.upload": "그림 올리기",
   "search.uploadNote": "가장 닮은 자리를 찾아갑니다",
   "search.or": "또는",
@@ -59,6 +62,7 @@ export default {
   "toast.notPicture": "그림이 아닙니다",
   "toast.badPicture": "열 수 없는 그림입니다",
   "toast.projectFailed": "그림에서 자리를 찾지 못했습니다",
+  "toast.roomUnreachable": "그 전시실에서는 자리를 찾지 못했습니다",
   "toast.brokenUrl": "읽을 수 없는 주소여서 다른 자리에서 시작합니다",
   "toast.offline": "네트워크가 없어도 볼 수 있습니다"
 };

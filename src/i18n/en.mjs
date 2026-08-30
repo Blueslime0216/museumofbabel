@@ -43,6 +43,8 @@ export default {
   "search.upload": "Upload a picture",
   "search.uploadNote": "we walk to the nearest address",
   "search.floor": "Floor",
+  "search.room": "Room",
+  "search.roomAny": "Any",
   "search.or": "or",
   "search.yours": "yours",
   "search.nearest": "nearest",
@@ -59,6 +61,7 @@ export default {
   "toast.notPicture": "That is not a picture",
   "toast.badPicture": "That picture could not be opened",
   "toast.projectFailed": "Could not read that picture",
+  "toast.roomUnreachable": "Found nothing in that room",
   "toast.brokenUrl": "That address could not be read. Here is somewhere else.",
   "toast.offline": "Ready to visit without a network"
 };

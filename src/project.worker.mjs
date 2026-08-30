@@ -27,13 +27,27 @@ self.onmessage = async event => {
   const message = event.data;
   if (message?.type !== 'project') return;
 
-  const { id, tier, locality, bitmap } = message;
+  const { id, tier, locality, room, bitmap } = message;
   try {
     const started = performance.now();
     const source = toRgba(bitmap);
     bitmap.close?.();
 
-    const result = projectRgba(source, tier, locality);
+    // room 을 주면 그 전시실의 읽는 방식으로 투영하고 좌표도 그 방 안으로 옮긴다.
+    // null 이면 방을 강제하지 않는다 (기본값).
+    const result = projectRgba(
+      source,
+      tier,
+      locality,
+      room === null || room === undefined ? {} : { room },
+    );
+
+    // 목표 방에 떨어지는 주소를 못 찾았다. 천문학적으로 드물지만 거짓말은 하지 않는다.
+    if (!result) {
+      self.postMessage({ type: 'failed', id, message: 'room-unreachable' });
+      return;
+    }
+
     const elapsed = performance.now() - started;
 
     // 원본(정규화된 것)과 결과를 둘 다 넘긴다. 나란히 보여 주는 데 쓴다.
@@ -48,6 +62,7 @@ self.onmessage = async event => {
         id,
         tier,
         locality,
+        room: result.room,
         x: String(result.x),
         y: String(result.y),
         error: result.error,
