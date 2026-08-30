@@ -539,7 +539,8 @@ for (const size of ['mobile', 'desktop']) {
       current: button.getAttribute('aria-current') === 'true',
     })),
   );
-  check('층이 낮은 것부터 오름차순이다', floors.map(f => f.tier).join(',') === '4,8,16,32');
+  // 0층이 로비, 그 위가 작품 층이다.
+  check('로비가 첫째고 작품 층이 오름차순이다', floors.map(f => f.tier).join(',') === '0,4,8,16,32');
   check('층마다 이름과 격자 크기가 있다', floors.every(f => /\d+\s*×\s*\d+/.test(f.text)), floors[0]?.text);
   check('지금 층이 표시된다', floors.filter(f => f.current).length === 1);
 
@@ -663,13 +664,59 @@ for (const size of ['mobile', 'desktop']) {
     );
   }
 
+  // ── 로비 (0층) ──────────────────────────────────────────────────────
+  //
+  // 작품이 없는 층이다. 코드워드도 전시실도 없고, 축이 작아 걸으면 순환한다.
+  {
+    await page.click('#btn-floor');
+    await page.waitForTimeout(200);
+    await page.click('#floor-list .lang[data-tier="0"]');
+    await traveled(page);
+
+    const inLobby = await page.evaluate(() => ({
+      tier: window.__museum.state.tier,
+      address: location.search,
+    }));
+    check('로비로 갈 수 있다', inLobby.tier === 0, `tier ${inLobby.tier}`);
+    check('로비 주소가 0층이다', /[?&]a=v2\.0\./.test(inLobby.address), inLobby.address.slice(0, 24));
+
+    // 작품 정보를 열 수 없다. 로비에는 작품이 없다.
+    await page.click('#stage', { position: { x: 200, y: 200 } });
+    await page.waitForTimeout(350);
+    const sheetState = await page.evaluate(
+      () => document.getElementById('sheet').dataset.state,
+    );
+    check('로비에서는 작품 정보가 열리지 않는다', sheetState === 'hidden', sheetState);
+
+    // 순환. 축이 6비트라 64칸이면 제자리다.
+    const wrapped = await page.evaluate(() => {
+      const m = window.__museum;
+      const before = m.state;
+      // 방향키로 오른쪽으로 64번 (한 칸씩)
+      return { x: before.x, y: before.y };
+    });
+    check('로비 좌표가 순환 범위 안이다', BigInt(wrapped.x) < 64n && BigInt(wrapped.y) < 64n,
+      `${wrapped.x}, ${wrapped.y}`);
+
+    // 다시 작품 층으로 나온다
+    await page.click('#btn-floor');
+    await page.waitForTimeout(200);
+    await page.click('#floor-list .lang[data-tier="8"]');
+    await traveled(page);
+    check(
+      '로비에서 작품 층으로 돌아온다',
+      (await page.evaluate(() => window.__museum.state.tier)) === 8,
+    );
+  }
+
   // 찾기의 층 선택
   await page.click('#btn-search');
   await page.waitForTimeout(250);
   const segments = await page.evaluate(() =>
     [...document.querySelectorAll('#search-floor-row .segment')].map(b => Number(b.dataset.tier)),
   );
-  check('찾기에도 층 선택이 있다', segments.join(',') === '4,8,16,32');
+  // 로비는 없다. 찾기는 작품을 찾는 것이고 로비에는 작품이 없다.
+  check('찾기의 층 선택에 로비가 없다', segments.join(',') === '4,8,16,32', segments.join(','));
 
   await page.click('#search-floor-row .segment[data-tier="16"]');
   await page.fill('#search-text', 'abc,def');

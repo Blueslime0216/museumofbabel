@@ -10,7 +10,15 @@
 //   hash     주소 읽기와 쓰기
 //   sheet    고른 전시물의 정보
 
-import { tierSpec, coordinatesToCode, localityMix, randomCoordinate } from './codec.mjs';
+import {
+  tierSpec,
+  coordinatesToCode,
+  localityMix,
+  randomCoordinate,
+  axisBitsFor,
+  isLobbyTier,
+} from './codec.mjs';
+import { lobbyHome } from './lobby.mjs';
 import { createCamera, MIN_CELL } from './camera.mjs';
 import { zoomBudgetFor, isDeepestFloor } from './floors.mjs';
 import { ROOMS, CLUSTER_SPAN, roomOf } from './codec.mjs';
@@ -41,7 +49,7 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 // ── 상태 ─────────────────────────────────────────────────────────────────
 
 let state = readState();
-let spec = tierSpec(state.tier);
+let spec = isLobbyTier(state.tier) ? null : tierSpec(state.tier);
 let dirty = true;
 let restZoom = 120;
 let keyboardMode = false;
@@ -138,7 +146,8 @@ function resize() {
 // ── 자리 옮기기 ──────────────────────────────────────────────────────────
 
 function applyWorld() {
-  spec = tierSpec(state.tier);
+  // 로비에는 명세가 없다. spec 을 쓰는 곳은 모두 작품 층 전용이어야 한다.
+  spec = isLobbyTier(state.tier) ? null : tierSpec(state.tier);
   // 캐시를 비운다. 새 기준점의 칸은 전부 다른 그림이므로 남겨 둘 이유가 없다.
   // 그냥 두면 층 16 에서 46MB 가 쓸모없이 남아 있게 된다.
   tiles.invalidate();
@@ -147,7 +156,7 @@ function applyWorld() {
     locality: state.locality,
     baseX: state.x,
     baseY: state.y,
-    axisBits: spec.axisBits,
+    axisBits: axisBitsFor(state.tier),
   });
   // setWorld 가 그 층의 줌 한계를 카메라에 적용했다. 기본 줌은 그 한계에
   // 의존하므로 여기서 다시 계산해야 한다. 그러지 않으면 층을 옮긴 직후
@@ -190,13 +199,23 @@ function goto(next, { first = false } = {}) {
  * 층을 주면 그 층의 무작위 자리로 간다. 층 모달이 그렇게 쓴다.
  */
 function jumpRandom(tier = state.tier) {
-  const [x, y] = randomCoordinate(tierSpec(tier).axisBits);
+  // 로비는 순환 공간이 작으므로 무작위로 던지지 않고 가운데로 보낸다.
+  // 64x64 안에서 "무작위"는 뜻이 없고, 로비는 헤매는 곳이 아니다.
+  if (isLobbyTier(tier)) {
+    goto({ tier, ...lobbyHome() });
+    return;
+  }
+  const [x, y] = randomCoordinate(axisBitsFor(tier));
   goto({ tier, x, y });
 }
 
 // ── 전시물 고르기 ────────────────────────────────────────────────────────
 
 function openSheetAt(i, j) {
+  // 로비에는 작품이 없으므로 작품 정보를 열지 않는다.
+  // 나중에 여기에 큐레이터와 체험관 포털이 들어온다.
+  if (isLobbyTier(state.tier)) return;
+
   sheetCell = { i, j };
   const [x, y] = stage.coordOf(i, j);
   const key = stage.keyOf(i, j);

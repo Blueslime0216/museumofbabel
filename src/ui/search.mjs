@@ -17,13 +17,12 @@ import {
   DEFAULT_LOCALITY,
   fromBase36,
   parseHash,
-  tierSpec,
+  axisBitsFor,
 } from '../codec.mjs';
 import { readAddress } from '../png.mjs';
-import { FLOORS } from '../floors.mjs';
+import { ARTWORK_FLOORS } from '../floors.mjs';
 import { t } from '../i18n/index.mjs';
 
-const axisBitsFor = tier => tierSpec(tier).axisBits;
 
 /** 투영을 이보다 오래 기다리지 않는다. */
 const PROJECT_TIMEOUT_MS = 30000;
@@ -96,8 +95,10 @@ export function createSearch({ toast, onGo, getWorld }) {
   let searchTier = getWorld().tier;
 
   function renderFloors() {
+    // 로비는 뺀다. 찾기는 "이 그림에 가까운 작품" 을 찾는 것이고
+    // 로비에는 작품이 없다. 목록에 두면 고를 수 있는 것처럼 보인다.
     floorRow.replaceChildren(
-      ...FLOORS.map(floor => {
+      ...ARTWORK_FLOORS.map(floor => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'segment';

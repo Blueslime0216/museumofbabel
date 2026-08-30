@@ -17,11 +17,12 @@ import {
   parseHash,
   formatHash,
   styleAt,
+  axisBitsFor,
+  isLobbyTier,
 } from '../../src/codec.mjs';
 import { stampAddress } from '../../src/png.mjs';
 import { encodePng } from './png-encode.mjs';
 
-const axisBitsFor = tier => tierSpec(tier).axisBits;
 
 /** 링크 카드에 넣을 크기. 256 의 정수배여야 한다. */
 export const CARD_SIZE = 1024;
@@ -38,6 +39,10 @@ export function readAddress(text) {
   const candidate = at >= 0 ? trimmed.slice(at) : `#${trimmed}`;
   try {
     const state = parseHash(candidate, axisBitsFor);
+    // 로비(0층)는 작품이 없으므로 그림을 만들 수 없다. 여기서 끊는다.
+    // parseHash 는 주소 형식으로서 0층을 받지만, 이 함수의 약속은
+    // "그릴 수 있는 작품 하나" 이므로 더 좁다.
+    if (isLobbyTier(state.tier)) return null;
     if (!TIERS.includes(state.tier)) return null;
     return state;
   } catch {

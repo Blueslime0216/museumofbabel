@@ -27,7 +27,7 @@
 // 하나라도 어긋나면 같은 좌표가 언어에 따라 다른 자리에서 나온다.
 // `test/label.test.mjs` 가 크기를 직접 센다.
 
-import { tierSpec, decodeFields, toBase36, roomOf, ROOMS } from './codec.mjs';
+import { tierSpec, decodeFields, toBase36, roomOf, ROOMS, isLobbyTier } from './codec.mjs';
 import { language } from './i18n/index.mjs';
 
 /** Cb·Cr 각도에 대응하는 색 이름. 0도가 파랑, 반시계로 돈다. 열두 개. */
@@ -256,6 +256,11 @@ function colorName(cb, cr, center, luma01, lang) {
  * lang 을 주지 않으면 지금 언어를 쓴다. 테스트는 명시해서 부른다.
  */
 export function describe({ tier, x, y, code, lang = language() }) {
+  // 로비에는 작품이 없다. 제목도 소장품 번호도 없다.
+  // 부르는 쪽이 로비에서 이 함수를 부르지 않는 것이 옳지만, 조용히 이상한
+  // 값을 내는 것보다 분명히 거절하는 편이 낫다.
+  if (isLobbyTier(tier)) throw new RangeError('로비에는 작품이 없다');
+
   const spec = tierSpec(tier);
   const fields = decodeFields(spec, code);
   const { quant, baseLuma, baseCb, baseCr } = fields.header;

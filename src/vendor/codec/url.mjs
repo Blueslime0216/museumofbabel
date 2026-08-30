@@ -23,7 +23,7 @@
 //
 // basis.mjs의 주석이 이미 이 규칙을 프로젝트 규약으로 못박아 두었다.
 
-import { TIERS, DEFAULT_TIER } from './spec.mjs';
+import { ADDRESSABLE_TIERS, DEFAULT_TIER } from './spec.mjs';
 import { LOCALITY_LEVELS, DEFAULT_LOCALITY } from './scramble.mjs';
 
 export const URL_VERSION = 'v2';
@@ -66,8 +66,9 @@ export function parseHash(hash, axisBitsForTier) {
   const match = PATTERN.exec(hash ?? '');
   if (!match) throw new SyntaxError('좌표 형식이 아니다');
 
+  // 작품 층 + 로비. 로비(0층)는 tierSpec 이 없지만 주소로는 가리킬 수 있어야 한다.
   const tier = Number(match[1]);
-  if (!TIERS.includes(tier)) throw new RangeError(`지원하지 않는 층: ${tier}`);
+  if (!ADDRESSABLE_TIERS.includes(tier)) throw new RangeError(`지원하지 않는 층: ${tier}`);
 
   const locality = Number(match[2]);
   if (!Number.isInteger(locality) || locality < 0 || locality >= LOCALITY_LEVELS.length) {

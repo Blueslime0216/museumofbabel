@@ -23,7 +23,7 @@
 import {
   formatHash,
   parseHash,
-  tierSpec,
+  axisBitsFor,
   DEFAULT_TIER,
   DEFAULT_LOCALITY,
   randomCoordinate,
@@ -34,7 +34,6 @@ const MIN_GAP_MS = 500;
 /** 쿼리 이름. 한 자로 둔다. 주소가 이미 길다. */
 export const PARAM = 'a';
 
-const axisBitsFor = tier => tierSpec(tier).axisBits;
 
 /** 상태 → 주소창에 넣을 문자열. `?a=…` 형태다. */
 export function queryFor(state) {

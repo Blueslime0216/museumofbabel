@@ -6,7 +6,8 @@
 //
 // 이 대응을 한 곳에만 둔다. 층 모달과 찾기 모달이 같은 목록을 쓴다.
 
-import { TIERS, tierSpec, formatHash } from './codec.mjs';
+import { TIERS, tierSpec, formatHash, LOBBY_TIER, isLobbyTier } from './codec.mjs';
+import { LOBBY_SPAN } from './lobby.mjs';
 import { MAX_VISIBLE, MIN_CELL } from './camera.mjs';
 import { t } from './i18n/index.mjs';
 
@@ -66,6 +67,11 @@ export function isDeepestFloor(tier) {
  * 그것은 "적당한 속도로 탐색" 의 범위를 넘는다고 보고 덮지 않는다.
  */
 export function zoomBudgetFor(tier) {
+  // 로비는 작품을 그리지 않으므로 렌더 부담이 거의 없다. 그래서 1층과 같은
+  // 예산을 준다. 더 넓게 열 수도 있지만, 빈 격자를 멀리 보여 줄 이유가 없다.
+  if (isLobbyTier(tier)) {
+    return { maxVisible: MAX_VISIBLE, minCell: MIN_CELL, restScale: 1 };
+  }
   const level = Math.max(1, FLOORS.find(floor => floor.tier === tier)?.level ?? 1);
   const steps = level - 1;
   const narrow = NARROW_PER_FLOOR ** steps;
@@ -79,26 +85,59 @@ export function zoomBudgetFor(tier) {
   };
 }
 
-/** 낮은 층부터. 층 번호는 1부터 센다. */
-export const FLOORS = TIERS.slice()
-  .sort((a, b) => a - b)
-  .map((tier, index) => {
-    const spec = tierSpec(tier);
-    return {
-      tier,
-      level: index + 1,
-      grid: `${tier} × ${tier}`,
-      zones: spec.blockCount,
-      bytes: spec.byteLength,
-      /** 이 층의 주소가 몇 자인가. 층을 고르는 데 실제로 쓰이는 정보다. */
-      hashLength: formatHash({
+/**
+ * 로비(0층). 작품이 없으므로 tierSpec 이 없다.
+ *
+ * 층 번호가 0이고 나머지가 1부터인 이유: 관람객에게 "0층 = 로비" 는 건물의
+ * 관례 그대로다. 그리고 작품 층의 번호를 바꾸지 않아도 된다.
+ */
+const LOBBY_FLOOR = {
+  tier: LOBBY_TIER,
+  level: 0,
+  isLobby: true,
+  grid: `${LOBBY_SPAN} × ${LOBBY_SPAN}`,
+  zones: 0,
+  bytes: 0,
+  hashLength: formatHash({
+    tier: LOBBY_TIER,
+    locality: 4,
+    x: LOBBY_SPAN - 1n,
+    y: LOBBY_SPAN - 1n,
+  }).length,
+};
+
+/** 낮은 층부터. 로비가 0층, 작품 층은 1부터. */
+export const FLOORS = [
+  LOBBY_FLOOR,
+  ...TIERS.slice()
+    .sort((a, b) => a - b)
+    .map((tier, index) => {
+      const spec = tierSpec(tier);
+      return {
         tier,
-        locality: 4,
-        x: (1n << BigInt(spec.axisBits)) - 1n,
-        y: (1n << BigInt(spec.axisBits)) - 1n,
-      }).length,
-    };
-  });
+        level: index + 1,
+        isLobby: false,
+        grid: `${tier} × ${tier}`,
+        zones: spec.blockCount,
+        bytes: spec.byteLength,
+        /** 이 층의 주소가 몇 자인가. 층을 고르는 데 실제로 쓰이는 정보다. */
+        hashLength: formatHash({
+          tier,
+          locality: 4,
+          x: (1n << BigInt(spec.axisBits)) - 1n,
+          y: (1n << BigInt(spec.axisBits)) - 1n,
+        }).length,
+      };
+    }),
+];
+
+/**
+ * 작품이 있는 층만. 로비를 뺀다.
+ *
+ * 찾기(투영)처럼 "작품" 을 전제하는 기능은 이 목록을 쓴다. 로비를 그런 자리에
+ * 두면 고를 수 있는 것처럼 보이고, 골랐을 때 할 수 있는 일이 없다.
+ */
+export const ARTWORK_FLOORS = FLOORS.filter(floor => !floor.isLobby);
 
 export function floorFor(tier) {
   return FLOORS.find(floor => floor.tier === tier) ?? FLOORS[0];

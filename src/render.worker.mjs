@@ -19,7 +19,9 @@ import {
   createFrame,
   renderCode,
   styleAt,
+  isLobbyTier,
 } from './codec.mjs';
+import { renderLobbyTile } from './lobby.mjs';
 
 /** 층마다 프레임 버퍼와 혼합 계수를 재사용한다. */
 const perTier = new Map();
@@ -41,21 +43,29 @@ self.onmessage = async event => {
 
   const { id, key, tier, locality, x, y } = message;
   try {
-    const { spec, mix, frame } = contextFor(tier, locality);
-    // 순수 계산 시간만 잰다. 비트맵으로 옮기는 비용은 따로다.
-    const started = performance.now();
     const wx = BigInt(`0x${x}`);
     const wy = BigInt(`0x${y}`);
-    const code = coordinatesToCode(wx, wy, mix, spec.axisBits);
-    // 전시실은 좌표에서 나온다. 주소에 담기지 않으므로 여기서 유도한다.
-    // 실측: 63타일에 대해 0.553ms. 렌더 한 장이 0.4~1ms 이므로 부담이 없다.
-    renderCode(spec, code, frame, styleAt(wx, wy));
+
+    // 순수 계산 시간만 잰다. 비트맵으로 옮기는 비용은 따로다.
+    const started = performance.now();
+    let source;
+    if (isLobbyTier(tier)) {
+      // 로비. 코드워드도 전시실도 없다. tierSpec 을 부르면 안 된다.
+      source = renderLobbyTile(wx, wy);
+    } else {
+      const { spec, mix, frame } = contextFor(tier, locality);
+      const code = coordinatesToCode(wx, wy, mix, spec.axisBits);
+      // 전시실은 좌표에서 나온다. 주소에 담기지 않으므로 여기서 유도한다.
+      // 실측: 63타일에 대해 0.553ms. 렌더 한 장이 0.4~1ms 이므로 부담이 없다.
+      renderCode(spec, code, frame, styleAt(wx, wy));
+      source = frame.rgba;
+    }
     const computeMs = performance.now() - started;
 
     // 픽셀을 복사해서 넘긴다. createImageBitmap 이 비동기이므로 다음 요청이
     // 같은 프레임 버퍼에 덮어쓰면 엉뚱한 그림이 나간다. 256KB 복사는
     // 렌더 비용에 비하면 싸다.
-    const pixels = new ImageData(new Uint8ClampedArray(frame.rgba), CANVAS, CANVAS);
+    const pixels = new ImageData(new Uint8ClampedArray(source), CANVAS, CANVAS);
     const bitmap = await createImageBitmap(pixels);
     self.postMessage(
       { type: 'rendered', id, key, x, y, tier, locality, computeMs, bitmap },

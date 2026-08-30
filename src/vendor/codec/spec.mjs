@@ -44,6 +44,43 @@ export const TIERS = [4, 8, 16, 32];
 
 export const DEFAULT_TIER = 8;
 
+// ── 로비 ─────────────────────────────────────────────────────────────────
+//
+// 0층은 **작품이 없는 층**이다. 그래서 tierSpec 이 없고 코드워드도 없다.
+// 코덱이 아는 것은 "그런 층 번호가 주소에 나타날 수 있다"는 사실 하나뿐이며,
+// 그 층에 무엇이 있는지는 앱이 정한다(로비 · 큐레이터 · 체험관 포털 · 후원자).
+//
+// ── 왜 작품 공간 밖에 두는가 ─────────────────────────────────────────────
+//
+// 로비를 작품 층 안에 만들면 그 좌표의 작품이 보이지 않게 된다. 그것은
+// "모든 주소는 유효하다"를 깨뜨린다. 층을 따로 두면 잃는 그림이 없다.
+//
+// ── 왜 축이 작은가 ───────────────────────────────────────────────────────
+//
+// 좌표는 축 크기로 감긴다(space.mjs 의 wrap). 축을 작게 주면 순환이 걸어서
+// 도달할 거리 안으로 들어온다. 6비트면 64x64 칸이므로 옆으로 64칸 걸으면
+// 출발점으로 돌아온다. 작은 우주다.
+
+/** 로비의 층 번호. tierSpec 을 부르면 안 된다. */
+export const LOBBY_TIER = 0;
+
+/** 로비 축 비트. 64x64 칸에서 감긴다. */
+export const LOBBY_AXIS_BITS = 6;
+
+/** 로비인가. tierSpec 을 부르기 전에 반드시 확인한다. */
+export function isLobbyTier(tier) {
+  return tier === LOBBY_TIER;
+}
+
+/**
+ * URL 에 나타날 수 있는 층 전부. 로비를 포함한다.
+ *
+ * TIERS 와 구분하는 이유: TIERS 는 "작품이 있는 층" 이고 buildSpec 이 성립하는
+ * 값들이다. 로비는 그 조건을 만족하지 않으므로 TIERS 에 넣으면 tierSpec 이
+ * 깨진다. 주소 형식만 넓히면 된다.
+ */
+export const ADDRESSABLE_TIERS = [LOBBY_TIER, ...TIERS];
+
 // 전역 색조/세기 필드. 주소의 가장 낮은 자리에 둔다.
 //
 // 왜 최상위가 아니라 최하위인가:
@@ -320,6 +357,17 @@ export function buildSpec({
 }
 
 const specCache = new Map();
+
+/**
+ * 층의 축 비트. 로비를 포함해 주소로 쓸 수 있는 모든 층에 대해 답한다.
+ *
+ * 왜 이 함수가 있는가: `tierSpec(tier).axisBits` 는 로비에서 던진다. 그 분기를
+ * 부르는 쪽마다 쓰면 언젠가 한 곳을 빠뜨린다. parseHash 가 축 비트를 콜백으로
+ * 받으므로 그 콜백은 늘 이것이어야 한다.
+ */
+export function axisBitsFor(tier) {
+  return isLobbyTier(tier) ? LOBBY_AXIS_BITS : tierSpec(tier).axisBits;
+}
 
 /** 티어 하나의 명세를 얻는다. 결과는 캐시되며 불변으로 취급한다. */
 export function tierSpec(tier) {
