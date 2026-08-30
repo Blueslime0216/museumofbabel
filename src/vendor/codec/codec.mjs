@@ -25,6 +25,25 @@ import { codeToBytes, decomposeBytes, composeBytes, bytesToCode } from './radix.
 /** 크로마 평면 해상도. 4:2:0이므로 루마의 절반. */
 export const CHROMA = CANVAS / 2;
 
+/**
+ * 기저 기여를 반올림하기 위해 더하는 값. 2^(BASIS_SHIFT-1) = 32.
+ *
+ * 왜 필요한가:
+ *   기여는 (ampCoef * bval) >> BASIS_SHIFT 로 계산한다. `>>`는 산술 시프트라
+ *   내림이고, 음수에서는 0에서 멀어지는 쪽으로 내려간다. 그래서 양수 기여는
+ *   0쪽으로 깎이고 음수 기여는 더 커진다. 결과는 한쪽으로 쏠린 편향이다.
+ *
+ *   실측하면 |ampCoef|가 작을 때 픽셀마다 평균 -0.49 만큼 어두워졌다.
+ *   기저 표 전체에 걸쳐 거의 정확히 -0.5 다. ampCoef=1 에서는 기저 칸의
+ *   49.2%가 0으로 죽어 서로 다른 기저가 같은 그림이 되기도 했다.
+ *
+ *   32를 더하고 시프트하면 가장 가까운 정수로 반올림된다. 실측 편향이
+ *   -0.4922 에서 +0.0078 로 떨어진다. 여전히 정수 연산만 쓴다.
+ *
+ *   AMP_MULT의 비대칭과 같은 종류의 결함이었다. 미감 조절이 아니다.
+ */
+const BASIS_ROUND = 1 << (BASIS_SHIFT - 1);
+
 // ── 필드 값 확장 ─────────────────────────────────────────────────────────
 // 좁은 필드를 0..255로 펼친다. 최댓값이 정확히 255가 되도록 상위 비트를 반복한다.
 
@@ -274,7 +293,7 @@ export function writeBlock(
         // >>는 산술 시프트라 음수에서도 결정론적이다.
         bval = (bval + BASIS[nyRow + nx]) >> 1;
       }
-      let v = pred[predRow + x] + dcOffset + ((ampCoef * bval) >> BASIS_SHIFT);
+      let v = pred[predRow + x] + dcOffset + ((ampCoef * bval + BASIS_ROUND) >> BASIS_SHIFT);
       if (v < 0) v = 0;
       else if (v > 255) v = 255;
       luma[lumaRow + x] = v;
