@@ -38,12 +38,12 @@ import {
 import { codeToCoordinates, localityMix } from './space.mjs';
 
 /**
- * 시험해 볼 양자화 후보.
+ * 시험해 볼 양자화 후보. 16개 전부.
  *
- * 전부 시험하면 티어 16에서 느려진다. 대표값만 고른다.
- * 이것은 rank 방향의 탐색이므로 허용된다.
+ * 이것은 rank 방향의 탐색이므로 허용된다. unrank(주소 → 그림)는 여전히
+ * 검색이 없다는 불변식을 지킨다.
  */
-const QUANT_CANDIDATES = [3, 6, 9, 12, 15];
+const QUANT_CANDIDATES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
 const PATTERN_AREA = BASIS_SIZE * BASIS_SIZE;
 
