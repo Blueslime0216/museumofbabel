@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { describe, TITLE_WORDS } from '../src/label.mjs';
+import { describe, TITLE_WORDS, TITLE_SERIES } from '../src/label.mjs';
 import {
   tierSpec,
   localityMix,
@@ -85,13 +85,13 @@ test('제목에 undefined 나 NaN 이 새지 않는다', () => {
 
 // ── 낱말 표 ──────────────────────────────────────────────────────────────
 //
-// 제목 번호는 코드워드의 고정된 자리에서 뽑는다 (형용사 32 · 명사 32 · 형식 8).
+// 제목 번호는 코드워드의 고정된 자리에서 뽑는다 (형용사 64 · 명사 64 · 형식 16 · 명작 16).
 // 표가 한 칸이라도 짧으면 그 자리에 걸린 좌표에서 undefined 가 새고, 길면
 // 언어에 따라 다른 낱말이 나온다. 좌표를 뽑아 보는 방식으로는 32개 중 하나가
 // 빈 것을 놓치기 쉬우므로 세어 본다.
 
 test('모든 언어의 낱말 표 크기가 같다', () => {
-  const SIZES = { hues: 12, neutrals: 8, adjectives: 32, nouns: 32, forms: 8 };
+  const SIZES = { hues: 12, neutrals: 8, adjectives: 64, nouns: 64, forms: 16, masterworks: 16 };
   for (const [group, size] of Object.entries(SIZES)) {
     for (const lang of LANGS) {
       const table = TITLE_WORDS[group][lang];
@@ -102,7 +102,7 @@ test('모든 언어의 낱말 표 크기가 같다', () => {
 });
 
 test('낱말 표에 빈 칸이나 중복이 없다', () => {
-  for (const group of ['hues', 'neutrals', 'adjectives', 'nouns']) {
+  for (const group of ['hues', 'neutrals', 'adjectives', 'nouns', 'masterworks']) {
     for (const lang of LANGS) {
       const table = TITLE_WORDS[group][lang];
       for (const word of table) {
@@ -141,8 +141,11 @@ for (const [lang, script] of Object.entries(SCRIPTS)) {
     for (let i = 0; i < 60; i++) {
       const [x, y] = randomCoordinate(spec.axisBits);
       const { title } = at(x, y, lang).info;
-      assert.ok(script.test(title), title);
-      assert.ok(!/[A-Za-z]/.test(title), `라틴 문자가 남았다: ${title}`);
+      // 연작 번호는 일부러 언어를 가리지 않는다. 로마 숫자는 어느 나라 도록에서나
+      // 그대로 쓰므로 번역하지 않는다. 그 꼬리만 떼고 본체를 본다.
+      const body = title.replace(/ (?:I|V|X)+$/, '');
+      assert.ok(script.test(body), title);
+      assert.ok(!/[A-Za-z]/.test(body), `라틴 문자가 남았다: ${title}`);
     }
   });
 }
@@ -275,4 +278,90 @@ test('전시실 정보가 언어와 무관하다', () => {
   const ko = describe({ tier: 16, x, y, code, lang: 'ko' }).room;
   const en = describe({ tier: 16, x, y, code, lang: 'en' }).room;
   assert.deepEqual(ko, en);
+});
+
+// ── 제목의 다양성 · 명작 · 연작 ──────────────────────────────────────────
+//
+// 제목의 조각은 코드워드의 서로 다른 자리에서 뽑는다. 자리가 겹치면 두 조각이
+// 함께 움직여서, 표를 늘려도 조합이 늘지 않는다. 크기를 세는 검사로는 그것을
+// 잡을 수 없다 — 표는 멀쩡하고 뽑는 자리만 잘못됐기 때문이다. 그래서 센다.
+
+test('제목이 충분히 다양하다', () => {
+  const seen = new Set();
+  const N = 3000;
+  for (let i = 0; i < N; i++) {
+    const [x, y] = randomCoordinate(spec.axisBits);
+    seen.add(at(x, y, 'ko').info.title);
+  }
+  // 표만 보면 형식 16 x 형용사 64 x 명사 64 = 65,536 골격이다. 색까지 곱해지므로
+  // 3,000 표본이면 겹침이 적어야 한다. 자리가 겹치면 이 값이 뚝 떨어진다.
+  assert.ok(
+    seen.size > N * 0.4,
+    `${N} 개에서 서로 다른 제목이 ${seen.size} 개뿐이다. 뽑는 자리가 겹쳤을 수 있다`,
+  );
+});
+
+test('네 조각이 서로 독립으로 움직인다', () => {
+  // 같은 좌표에서 한 조각만 달라지는 코드워드를 만들 수는 없으므로, 많은 표본에서
+  // 각 자리의 값이 골고루 나오는지를 본다. 한 자리가 죽으면 그 조각이 고정된다.
+  const forms = new Set();
+  const adjectives = new Set();
+  const nouns = new Set();
+  for (let i = 0; i < 4000; i++) {
+    const [x, y] = randomCoordinate(spec.axisBits);
+    const code = coordinatesToCode(x, y, localityMix(LOCALITY, spec.axisBits), spec.axisBits);
+    const pick = (shift, size) => Number((code >> BigInt(shift)) & BigInt(size - 1));
+    forms.add(pick(59, 16));
+    adjectives.add(pick(31, 64));
+    nouns.add(pick(43, 64));
+  }
+  assert.equal(forms.size, 16, `형식 자리가 ${forms.size} 가지만 낸다`);
+  assert.equal(adjectives.size, 64, `형용사 자리가 ${adjectives.size} 가지만 낸다`);
+  assert.equal(nouns.size, 64, `명사 자리가 ${nouns.size} 가지만 낸다`);
+});
+
+test('명작은 드물게 나오고 다섯 언어 모두 있다', () => {
+  const lists = Object.fromEntries(
+    LANGS.map(lang => [lang, new Set(TITLE_WORDS.masterworks[lang])]),
+  );
+  let found = 0;
+  const N = 20000;
+  for (let i = 0; i < N; i++) {
+    const [x, y] = randomCoordinate(spec.axisBits);
+    if (lists.ko.has(at(x, y, 'ko').info.title)) found++;
+  }
+  // 설계는 1/512 다. 너무 흔하면 특별하지 않고, 너무 드물면 아무도 못 본다.
+  const rate = N / Math.max(1, found);
+  assert.ok(rate > 256 && rate < 1024, `명작이 1/${rate.toFixed(0)} 로 나온다 (설계 1/512)`);
+});
+
+test('명작에는 연작 번호가 붙지 않는다', () => {
+  // 고유한 이름에 번호를 달면 고유하지 않다.
+  const masters = new Set(TITLE_WORDS.masterworks.ko);
+  for (let i = 0; i < 20000; i++) {
+    const [x, y] = randomCoordinate(spec.axisBits);
+    const { title } = at(x, y, 'ko').info;
+    const bare = title.replace(/ (?:I|V|X)+$/, '');
+    if (bare !== title) {
+      assert.ok(!masters.has(bare), `명작에 연작 번호가 붙었다: ${title}`);
+    }
+  }
+});
+
+test('연작 번호가 이따금 붙는다', () => {
+  let numbered = 0;
+  const N = 4000;
+  for (let i = 0; i < N; i++) {
+    const [x, y] = randomCoordinate(spec.axisBits);
+    const { title } = at(x, y, 'ko').info;
+    if (TITLE_SERIES.some(numeral => title.endsWith(` ${numeral}`))) numbered++;
+  }
+  const rate = N / Math.max(1, numbered);
+  assert.ok(rate > 5 && rate < 14, `연작이 1/${rate.toFixed(1)} 로 붙는다 (설계 1/8)`);
+});
+
+test('연작 번호에 I 이 홀로 오지 않는다', () => {
+  // 홀로 있는 작품에 "제1번" 을 붙이면 없는 연작을 암시한다.
+  assert.ok(!TITLE_SERIES.includes('I'), TITLE_SERIES.join(' '));
+  assert.equal(TITLE_SERIES.length, 8);
 });
