@@ -217,17 +217,20 @@ function projectWithQuant(spec, target, quant, baseLuma, baseCb, baseCr, scratch
         }
 
         // 기저 64개 x 진폭 8개를 평가한다. 이득이 가장 큰 조합을 고른다.
-        let bestGain = 0;
+        //
+        // bestGain을 -Infinity로 두고 인덱스 0부터 돈다. AMP_MULT에 0이 없으므로
+        // "AC를 넣지 않는다"는 선택지가 이제 존재하지 않는다. 이득이 음수인
+        // 조합밖에 없어도 그중 가장 덜 나쁜 것을 골라야 한다.
+        let bestGain = -Infinity;
         let chosenBasis = 0;
         let chosenAmp = 0;
         for (let k = 0; k < 64; k++) {
           const patternBase = k * PATTERN_AREA;
           let corr = 0;
           for (let p = 0; p < PATTERN_AREA; p++) corr += sums[p] * BASIS[patternBase + p];
-          if (corr === 0) continue;
           const energy = BASIS_ENERGY[k] * tileArea;
 
-          for (let a = 1; a < AMP_MULT.length; a++) {
+          for (let a = 0; a < AMP_MULT.length; a++) {
             // 디코더의 기여식과 같은 배율: (AMP_MULT * acStep * bval) >> 6
             // 이득은 2*s*corr - s^2*energy (s = AMP*acStep/64)인데,
             // 4096을 곱해 정수로 비교한다. 부동소수점 나눗셈을 피한다.
