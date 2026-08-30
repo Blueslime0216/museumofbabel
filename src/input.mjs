@@ -27,6 +27,13 @@ export function createInput({
   onDragStart,
   onGestureEnd,
   isBlocked,
+  /**
+   * 손이 직접 줌했다. 휠과 핀치가 이것을 부른다.
+   *
+   * `onChange` 와 나눠 둔 이유: 개방 중에는 줌만 충돌하고 이동은 괜찮다.
+   * 둘을 구분하지 못하면 드래그에도 개방의 줌 몰기를 놓아 버려서 줌이 멈춘다.
+   */
+  onZoom,
 }) {
   const pointers = new Map();
   let gesture = null; // 두 손가락일 때의 기준
@@ -102,6 +109,7 @@ export function createInput({
       if (gesture && gesture.distance > 8 && distance > 8) {
         const { width, height } = stage.view;
         camera.zoomAround((gesture.zoom * distance) / gesture.distance, midX, midY, width, height);
+        onZoom?.();
         onChange?.();
       }
       return;
@@ -153,6 +161,7 @@ export function createInput({
       const { width, height } = stage.view;
       const factor = Math.exp(-event.deltaY * WHEEL_STEP);
       camera.zoomAround(camera.zoom * factor, px, py, width, height);
+      onZoom?.();
       onChange?.();
       onGestureEnd?.();
     },

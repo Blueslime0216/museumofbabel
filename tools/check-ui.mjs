@@ -1452,6 +1452,104 @@ for (const size of ['mobile', 'desktop']) {
   await page.close();
 }
 
+// ── 5.7 — 개방이 기기 속도에 맞고, 인트로 중 줌이 어긋나지 않는다 ────────
+
+{
+  const page = await openPage('desktop');
+  await settled(page);
+
+  // 개방 길이가 최소(400ms) 이상 최대(1400ms) 이하다
+  {
+    const seen = [];
+    await page.click('#btn-random');
+    // 개방에 들어선 순간의 길이를 잡는다
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'open', null, {
+      timeout: 20000,
+    });
+    seen.push(await page.evaluate(() => window.__museum.curtain.duration));
+    await traveled(page);
+
+    check(
+      '개방 길이가 400~1400ms 안이다',
+      seen[0] >= 400 && seen[0] <= 1400,
+      `${seen[0]}ms`,
+    );
+  }
+
+  // 깊은 층은 한 장이 더 오래 걸리므로 개방이 더 길거나 같다
+  {
+    const durationAt = async tier => {
+      await page.click('#btn-floor');
+      await page.waitForTimeout(200);
+      await page.click(`#floor-list .lang[data-tier="${tier}"]`);
+      await page.waitForFunction(() => window.__museum.curtain.phase === 'open', null, {
+        timeout: 60000,
+      });
+      const ms = await page.evaluate(() => window.__museum.curtain.duration);
+      await traveled(page);
+      return ms;
+    };
+
+    const shallow = await durationAt(4);
+    const deep = await durationAt(32);
+    check(
+      '깊은 층이 더 천천히 열린다',
+      deep >= shallow,
+      `층4 ${shallow}ms · 층32 ${deep}ms`,
+    );
+  }
+
+  // 인트로 중에 휠로 줌하면 개방이 줌 몰기를 손에 넘긴다
+  //
+  // 넘기지 않으면 zoomAround 가 옮긴 x·y 만 남고 줌은 forceZoom 이 되돌려서,
+  // 화면 가운데가 아닌 곳을 중심으로 줌한 것처럼 보인다. 실제 버그였다.
+  {
+    await page.click('#btn-random');
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'open', null, {
+      timeout: 20000,
+    });
+
+    const owned = await page.evaluate(() => window.__museum.curtain.drivesZoom);
+    const before = await page.evaluate(() => window.__museum.camera);
+
+    // 화면 가운데에서 줌한다. 가운데를 붙잡았으므로 x·y 가 움직이면 안 된다.
+    const box = await page.evaluate(() => ({
+      w: window.innerWidth,
+      h: window.innerHeight,
+    }));
+    await page.mouse.move(box.w / 2, box.h / 2);
+    await page.mouse.wheel(0, -240);
+    await page.waitForTimeout(120);
+
+    const handed = await page.evaluate(() => window.__museum.curtain.drivesZoom);
+    const after = await page.evaluate(() => window.__museum.camera);
+
+    check('개방이 처음에는 줌을 몬다', owned === true);
+    check('인트로 중 손이 줌하면 줌 몰기를 넘긴다', handed === false);
+    check(
+      '가운데를 붙잡고 줌하면 중심이 움직이지 않는다',
+      Math.abs(after.x - before.x) < 0.05 && Math.abs(after.y - before.y) < 0.05,
+      `(${before.x.toFixed(3)}, ${before.y.toFixed(3)}) → (${after.x.toFixed(3)}, ${after.y.toFixed(3)})`,
+    );
+    check('손이 줌한 만큼 실제로 줌이 커졌다', after.zoom > before.zoom, `${before.zoom.toFixed(1)} → ${after.zoom.toFixed(1)}`);
+
+    await traveled(page);
+    // 다음 여행에서는 개방이 다시 줌을 몬다
+    await page.click('#btn-random');
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'open', null, {
+      timeout: 20000,
+    });
+    check(
+      '다음 여행에서 개방이 줌 몰기를 되찾는다',
+      (await page.evaluate(() => window.__museum.curtain.drivesZoom)) === true,
+    );
+    await traveled(page);
+  }
+
+  check('개방 검사에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
+  await page.close();
+}
+
 await browser.close();
 rmSync(temp, { recursive: true, force: true });
 

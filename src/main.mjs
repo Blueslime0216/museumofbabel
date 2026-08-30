@@ -22,7 +22,7 @@ import { lobbyHome } from './lobby.mjs';
 import { createCamera, MIN_CELL } from './camera.mjs';
 import { zoomBudgetFor, isDeepestFloor } from './floors.mjs';
 import { ROOMS, CLUSTER_SPAN, roomOf } from './codec.mjs';
-import { createCurtainState, attachCurtain, PHASE } from './curtain.mjs';
+import { createCurtainState, attachCurtain, PHASE, OPEN_MIN_MS } from './curtain.mjs';
 import { createTiles } from './tiles.mjs';
 import { createStage } from './stage.mjs';
 import { createInput } from './input.mjs';
@@ -40,6 +40,36 @@ import { attachDebug } from './ui/debug.mjs';
 /** 개방이 시작될 때의 줌 배율. 3×3 쯤이 보이는 상태에서 벌어진다. */
 const OPEN_FROM = 1.85;
 
+/**
+ * 이 시간에 전시물 한 장을 그리는 기기에서 최소 개방(400ms)이 편안하다.
+ *
+ * 실측(데스크톱): 층4 0.474ms · 층8 0.515 · 층16 0.609 · 층32 1.104.
+ * 기준을 0.6 으로 두면 얕은 층은 최소값으로 열리고 층32 는 1.8배쯤 늘어난다.
+ * 오래된 휴대폰은 한 장이 몇 ms 이므로 훨씬 더 늘어난다.
+ */
+const OPEN_REFERENCE_MS = 0.6;
+
+/**
+ * 이번 개방을 얼마나 오래 열 것인가.
+ *
+ * 두 가지를 본다.
+ *   느린 기기냐            한 장 그리는 시간이 기준보다 길면 그 비율만큼 늘린다
+ *   미리 렌더가 남았느냐   남은 것이 도착할 시간을 더한다
+ *
+ * 개방 중에는 프레임마다 화면을 다시 그린다. 그래서 개방이 길면 그 자체가
+ * 부담이다. 빠른 기기에서 1.4초를 끄는 것은 지루하기만 한 것이 아니라 실제로
+ * 일을 더 하는 것이었다. 400ms 면 프레임 수가 84 → 24 로 줄어든다.
+ *
+ * @param missing preheat 이 끝내지 못한 전시물 개수
+ */
+function openDurationFor(missing) {
+  const perTile = tiles.stats.avgMs || OPEN_REFERENCE_MS;
+  let ms = OPEN_MIN_MS * Math.max(1, perTile / OPEN_REFERENCE_MS);
+  // 아직 오지 않은 것들이 개방 중에 도착하게 한다. 워커가 둘이므로 절반으로 센다.
+  if (missing > 0) ms += (missing * perTile) / 2;
+  return ms;
+}
+
 /** 방향키로 옮길 때 이 크기보다 작으면 감상할 수 있게 줌인해 준다. */
 const READING_CELL = 150;
 
@@ -52,6 +82,20 @@ let state = readState();
 let spec = isLobbyTier(state.tier) ? null : tierSpec(state.tier);
 let dirty = true;
 let restZoom = 120;
+
+/**
+ * 개방이 줌을 몰고 있는가.
+ *
+ * 개방 중에는 프레임마다 `forceZoom` 으로 줌을 직접 몬다. 그런데 그 사이에 손이
+ * 휠이나 핀치로 줌하면, `zoomAround` 가 붙잡은 점을 고정하려고 x·y 를 옮긴 뒤
+ * 다음 프레임의 `forceZoom` 이 줌만 되돌려 놓는다. 그러면 **옮겨진 x·y 만 남아서**
+ * 화면 가운데가 아닌 엉뚱한 곳을 중심으로 줌한 것처럼 보인다. 실제 버그였다.
+ *
+ * 그래서 손이 줌하면 개방은 줌 몰기를 포기하고 손에 넘긴다. 커튼은 계속 열리고
+ * 카메라만 사용자 것이 된다. 막아 버리는 것보다 이쪽이 낫다 — 인트로 중에 줌해
+ * 보는 사람은 그 층을 얼마나 넓게 볼 수 있는지 확인하려는 것이다.
+ */
+let openDrivesZoom = true;
 let keyboardMode = false;
 
 const camera = createCamera({ x: 0, y: 0, zoom: 120 });
@@ -184,7 +228,14 @@ function goto(next, { first = false } = {}) {
     hash.flush();
     // 개방이 끝난 뒤의 줌으로 준비한다. 지금 줌(줌인)으로 하면 열린 화면에
     // 빈 칸이 남는다. 실제로 그 버그가 있었다.
-    await stage.preheat({ zoom: restZoom });
+    //
+    // preheat 은 아직 못 그린 개수를 돌려준다. 그 값과 이 기기의 한 장 시간으로
+    // 이번 개방의 길이를 정한다.
+    const missing = await stage.preheat({ zoom: restZoom });
+    curtain.setOpen(openDurationFor(missing));
+
+    // 개방이 시작될 때 줌을 몰 권리를 되찾는다. 앞선 개방에서 손이 가져갔을 수 있다.
+    openDrivesZoom = true;
     dirty = true;
   };
 
@@ -287,6 +338,10 @@ const input = createInput({
   // 카메라를 건드릴 때마다 다시 그린다. 이것이 없으면 드래그가 뚝뚝 끊긴다.
   onChange: () => {
     dirty = true;
+  },
+  // 개방 중에 손이 줌했다. 줌 몰기를 손에 넘긴다. 이유는 openDrivesZoom 참조.
+  onZoom: () => {
+    if (curtain.phase === PHASE.OPEN) openDrivesZoom = false;
   },
   onGestureEnd: () => {
     hash.flush();
@@ -434,10 +489,15 @@ function frame(now) {
   curtain.update(dt);
 
   if (curtain.phase === PHASE.OPEN) {
-    // 개방과 줌아웃이 한 몸으로 움직인다. 스프링과 싸우지 않게 직접 몬다.
-    const t = curtain.openProgress;
-    const eased = 1 - Math.pow(1 - t, 2.2);
-    camera.forceZoom(restZoom * (OPEN_FROM + (1 - OPEN_FROM) * eased));
+    if (openDrivesZoom) {
+      // 개방과 줌아웃이 한 몸으로 움직인다. 스프링과 싸우지 않게 직접 몬다.
+      const t = curtain.openProgress;
+      const eased = 1 - Math.pow(1 - t, 2.2);
+      camera.forceZoom(restZoom * (OPEN_FROM + (1 - OPEN_FROM) * eased));
+    } else {
+      // 손이 줌을 가져갔다. 커튼은 계속 열리고 카메라는 평소처럼 따라간다.
+      camera.update(dt);
+    }
     dirty = true;
   } else if (camera.update(dt)) {
     dirty = true;
@@ -513,7 +573,14 @@ Object.assign(window, {
     // 전시실. 화면 검사가 좌표 → 방 배정을 직접 확인한다.
     rooms: { ROOMS, CLUSTER_SPAN, roomOf },
     get curtain() {
-      return { phase: curtain.phase, open: curtain.openProgress, dim: curtain.dimProgress };
+      return {
+        phase: curtain.phase,
+        open: curtain.openProgress,
+        dim: curtain.dimProgress,
+        // 이번 개방의 길이(ms). 기기 속도에 따라 달라지므로 검사가 직접 본다.
+        duration: curtain.openDuration,
+        drivesZoom: openDrivesZoom,
+      };
     },
     /**
      * 고른 것과 어둡게 하는 정도. 화면 검사가 이것을 본다.
