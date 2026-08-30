@@ -65,5 +65,42 @@ export default {
   "toast.projectFailed": "その絵から場所を見つけられませんでした",
   "toast.roomUnreachable": "その展示室では場所を見つけられませんでした",
   "toast.brokenUrl": "読めないアドレスなので別の場所から始めます",
-  "toast.offline": "ネットワークがなくても見られます"
+  "toast.offline": "ネットワークがなくても見られます",
+
+  // ── 展示室の名前 ────────────────────────────────────────────────────────
+  //
+  // 「〜の間」を基本にする。日本の美術館の札に近い言い方を選んだ。
+  // 中国語の辞書と同じ漢字だけにならないよう、仮名を入れて書き分けている。
+  "room.BASE": "大回廊",
+  "room.FLAT_MOSAIC": "陶板の間",
+  "room.WEAVE": "織りの間",
+  "room.HORIZON": "地平線の間",
+  "room.DIAGONAL": "光条の間",
+  "room.BLEED": "霧の間",
+  "room.ZONED_COLOUR": "色面の間",
+  "room.MONOCHROME": "単色の間",
+  "room.OPEN_LOOP": "格子の間",
+  "room.REVERSED": "逆流の間",
+  "room.NEGATIVE": "陰画の間",
+  "room.PASTEL": "淡彩の間",
+  "room.PRIMARY": "原色の間",
+  "room.HUE_RED": "紅の間",
+  "room.HUE_AMBER": "琥珀の間",
+  "room.HUE_GREEN": "翠の間",
+  "room.HUE_CYAN": "青緑の間",
+  "room.HUE_BLUE": "藍の間",
+  "room.HUE_VIOLET": "菫の間",
+  "room.DUO_BLUE_ORANGE": "黄昏刷り",
+  "room.DUO_RED_GREEN": "赤緑の間",
+  "room.DUO_VIOLET_AMBER": "蘭刷り",
+  "room.DUO_INK": "墨刷り",
+  "room.OPEN_MONO": "灰壁の間",
+  "room.RAIN": "雨の間",
+  "room.BLEED_PASTEL": "朝霧の間",
+  // 平らな陶板に青緑をかけると青磁の釉に見える。この文化圏にすぐ届く言葉だ。
+  "room.FLAT_CYAN": "青磁の間",
+  "room.DIAGONAL_DUO": "断層の間",
+  "room.MONO_PRIMARY": "濃彩の間",
+  "room.REVERSED_DIAGONAL": "引き潮の間",
+  "room.PIXEL_ART": "画素の間"
 };

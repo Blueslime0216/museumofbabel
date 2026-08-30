@@ -99,6 +99,7 @@ export function createSearch({ toast, onGo, getWorld }) {
   const goButton = $('btn-go');
   const floorRow = $('search-floor-row');
   const roomRow = $('search-room-row');
+  const roomName = $('search-room-name');
 
   /** 어느 층에서 찾을지. 열 때 지금 층으로 맞춘다. */
   let searchTier = getWorld().tier;
@@ -137,19 +138,23 @@ export function createSearch({ toast, onGo, getWorld }) {
   }
 
   /**
-   * 전시실 고르기. 이름 대신 번호를 쓴다.
+   * 전시실 고르기.
    *
-   * 31개 x 5개 언어를 미감이 확정되기 전에 번역할 이유가 없다. 작품 딸림표가
-   * 같은 번호("17 / 31")를 보여 주므로 번호만으로 이어진다. 걸어 다니다 마음에
-   * 든 방의 번호를 적어 와서 그 방 안에서 찾는 것이 이 기능의 쓰임새다.
+   * 칸에는 **번호만** 넣는다. 31칸에 이름을 적으면 칸이 터지고, 작품 딸림표가
+   * 이름과 번호를 함께 보여 주므로 번호만으로도 이어진다. 대신 지금 고른 방의
+   * 이름을 목록 아래에 한 줄로 적는다 — 이름이 필요한 순간은 그 하나다.
+   *
+   * 눈으로 보지 않는 사람에게는 번호만으로 아무 뜻이 없으므로 칸마다 이름을
+   * `aria-label` 로 붙인다.
    */
   function renderRooms() {
     roomRow.replaceChildren(
-      ...ROOMS.map((_, index) => {
+      ...ROOMS.map((room, index) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'segment';
         button.dataset.room = String(index);
+        button.setAttribute('aria-label', t(`room.${room.name}`));
         if (index === searchRoom) button.setAttribute('aria-current', 'true');
         button.append(
           Object.assign(document.createElement('span'), { textContent: String(index + 1) }),
@@ -157,6 +162,7 @@ export function createSearch({ toast, onGo, getWorld }) {
         return button;
       }),
     );
+    roomName.textContent = t(`room.${ROOMS[searchRoom].name}`);
   }
 
   /** 고른 것이 바뀌면 앞서 찾아 둔 결과는 뜻이 없다. */

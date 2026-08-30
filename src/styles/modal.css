@@ -471,6 +471,17 @@ body[data-sheet='expanded'] .controls {
   filter: invert(1);
 }
 
+/* 지금 고른 전시실의 이름. 번호 칸 바로 아래에 붙인다. */
+.chosen-room {
+  margin: -8px 0 14px;
+  padding-left: calc(10px + 3.4em);
+  font: 700 13px/1.4 var(--sans);
+  letter-spacing: 0.01em;
+  color: var(--on-modal);
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.6px var(--edge-modal);
+}
+
 /* 모달 아래의 한 줄 안내. 층 모달에서만 쓴다. */
 .modal-note {
   margin: 14px 0 0;

@@ -99,10 +99,12 @@ export function createSheet({ toast, onShow }) {
 
     const rows = [
       [t('sheet.floor'), `${artwork.tier} × ${artwork.tier}`],
-      // 전시실은 번호로만 보여 준다. 방마다 이름을 붙이는 것은 미감 결정이고,
-      // 31개 x 5개 언어를 미감이 확정되기 전에 번역할 이유가 없다.
-      // 값은 숫자뿐이므로 사전에 넣지 않는다. 낱말 없는 항목은 번역이 아니다.
-      [t('sheet.room'), `${info.room.index + 1} / ${info.room.total}`],
+      // 전시실은 이름과 번호를 함께 보여 준다.
+      //
+      // 이름만 두면 찾기 모달과 이어지지 않는다. 그쪽은 번호로 고르기 때문이다.
+      // 번호만 두면 기억에 남지 않는다. 둘을 붙여야 "청자의 방이 27번이구나" 가
+      // 남고, 걸어 다니다 마음에 든 방을 나중에 찾아갈 수 있다.
+      [t('sheet.room'), `${t(`room.${info.room.id}`)} · ${info.room.index + 1}`],
       [t('sheet.zones'), String(info.zones)],
       [t('sheet.addressSize'), `${info.bytes} B · ${info.bits} bit`],
       [t('sheet.quantization'), `${info.quant} / 15`],

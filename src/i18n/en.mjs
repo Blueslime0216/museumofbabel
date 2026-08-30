@@ -62,5 +62,45 @@ export default {
   "toast.projectFailed": "Could not read that picture",
   "toast.roomUnreachable": "Found nothing in that room",
   "toast.brokenUrl": "That address could not be read. Here is somewhere else.",
-  "toast.offline": "Ready to visit without a network"
+  "toast.offline": "Ready to visit without a network",
+
+  // ── 전시실 이름 ─────────────────────────────────────────────────────────
+  //
+  // 키는 rooms.mjs 의 코드명이다. 그래야 목록을 고칠 때 어긋난 것이 바로 보인다.
+  // `test/rooms-name.test.mjs` 가 모든 방에 다섯 언어의 이름이 있는지 확인한다.
+  //
+  // 번호는 기억에 남지 않는다. 그래서 그 방이 실제로 무엇처럼 보이는지에서
+  // 이름을 끌어냈다. 직역하지 않는다 — 각 언어에서 미술관 안내판으로 읽히는
+  // 말을 골랐고, 문화권에 더 잘 닿는 낱말이 있으면 그것을 썼다.
+  "room.BASE": "The Great Hall",
+  "room.FLAT_MOSAIC": "Hall of Tiles",
+  "room.WEAVE": "The Loom",
+  "room.HORIZON": "Horizon Gallery",
+  "room.DIAGONAL": "Hall of Rays",
+  "room.BLEED": "The Fog Room",
+  "room.ZONED_COLOUR": "Colour Fields",
+  "room.MONOCHROME": "Monochrome Room",
+  "room.OPEN_LOOP": "The Grid",
+  "room.REVERSED": "Counterflow Hall",
+  "room.NEGATIVE": "The Negative",
+  "room.PASTEL": "Pastel Wing",
+  "room.PRIMARY": "Primary Hall",
+  "room.HUE_RED": "The Crimson Room",
+  "room.HUE_AMBER": "The Amber Room",
+  "room.HUE_GREEN": "The Verdant Room",
+  "room.HUE_CYAN": "The Cyan Room",
+  "room.HUE_BLUE": "The Blue Room",
+  "room.HUE_VIOLET": "The Violet Room",
+  "room.DUO_BLUE_ORANGE": "Dusk Press",
+  "room.DUO_RED_GREEN": "Anaglyph Room",
+  "room.DUO_VIOLET_AMBER": "Orchid Press",
+  "room.DUO_INK": "The Ink Room",
+  "room.OPEN_MONO": "Ashlar Hall",
+  "room.RAIN": "The Rain Room",
+  "room.BLEED_PASTEL": "Morning Mist",
+  "room.FLAT_CYAN": "The Porcelain Room",
+  "room.DIAGONAL_DUO": "Fault Line",
+  "room.MONO_PRIMARY": "The Vivid Room",
+  "room.REVERSED_DIAGONAL": "Undertow Hall",
+  "room.PIXEL_ART": "Pixel Cabinet"
 };

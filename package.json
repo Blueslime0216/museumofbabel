@@ -9,7 +9,7 @@
     "build": "node tools/sync-codec.mjs --verify && vite build",
     "preview": "vite preview",
     "sync-codec": "node tools/sync-codec.mjs",
-    "test": "node --test test/camera.test.mjs test/curtain.test.mjs test/png.test.mjs test/label.test.mjs test/theme.test.mjs test/i18n.test.mjs test/artwork-png.test.mjs",
+    "test": "node --test test/camera.test.mjs test/curtain.test.mjs test/png.test.mjs test/label.test.mjs test/theme.test.mjs test/i18n.test.mjs test/artwork-png.test.mjs test/rooms-name.test.mjs",
     "check-ui": "node tools/check-ui.mjs",
     "check-api": "node tools/check-api.mjs",
     "measure": "node tools/measure.mjs",

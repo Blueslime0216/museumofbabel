@@ -63,5 +63,41 @@ export default {
   "toast.projectFailed": "그림에서 자리를 찾지 못했습니다",
   "toast.roomUnreachable": "그 전시실에서는 자리를 찾지 못했습니다",
   "toast.brokenUrl": "읽을 수 없는 주소여서 다른 자리에서 시작합니다",
-  "toast.offline": "네트워크가 없어도 볼 수 있습니다"
+  "toast.offline": "네트워크가 없어도 볼 수 있습니다",
+
+  // ── 전시실 이름 ─────────────────────────────────────────────────────────
+  //
+  // 안내판처럼 읽히게 짧게 짓는다. `～전시실` 을 반복하지 않는다.
+  "room.BASE": "대회랑",
+  "room.FLAT_MOSAIC": "타일의 방",
+  "room.WEAVE": "직조실",
+  "room.HORIZON": "지평선 화랑",
+  "room.DIAGONAL": "빛살의 방",
+  "room.BLEED": "안개의 방",
+  "room.ZONED_COLOUR": "색면 전시실",
+  "room.MONOCHROME": "단색조실",
+  "room.OPEN_LOOP": "격자의 방",
+  "room.REVERSED": "역류의 방",
+  "room.NEGATIVE": "음화실",
+  "room.PASTEL": "파스텔 별관",
+  "room.PRIMARY": "원색의 방",
+  "room.HUE_RED": "붉은 방",
+  "room.HUE_AMBER": "호박의 방",
+  "room.HUE_GREEN": "초록의 방",
+  "room.HUE_CYAN": "청록의 방",
+  "room.HUE_BLUE": "푸른 방",
+  "room.HUE_VIOLET": "보라의 방",
+  "room.DUO_BLUE_ORANGE": "황혼 인쇄실",
+  "room.DUO_RED_GREEN": "적록의 방",
+  "room.DUO_VIOLET_AMBER": "난초 인쇄실",
+  "room.DUO_INK": "먹의 방",
+  "room.OPEN_MONO": "회벽의 방",
+  "room.RAIN": "비의 방",
+  "room.BLEED_PASTEL": "아침 안개실",
+  // 평면 타일에 청록을 씌우면 청자 유약처럼 보인다. 이 문화권에 곧바로 닿는 말이다.
+  "room.FLAT_CYAN": "청자의 방",
+  "room.DIAGONAL_DUO": "단층의 방",
+  "room.MONO_PRIMARY": "선명한 방",
+  "room.REVERSED_DIAGONAL": "썰물의 방",
+  "room.PIXEL_ART": "픽셀 진열실"
 };

@@ -789,6 +789,30 @@ for (const size of ['mobile', 'desktop']) {
   // 그 방이 자기 방식으로 읽어서 올린 그림과 평균 10배 멀어진다(실측).
   check('전시실 기본값이 기준 전시실이다', rooms.current === '0', String(rooms.current));
 
+  // 칸에는 번호만 있고, 고른 방의 이름이 아래에 따로 나온다
+  {
+    const shown = await page.evaluate(() => ({
+      name: document.getElementById('search-room-name').textContent.trim(),
+      label: document
+        .querySelector('#search-room-row .segment[data-room="26"]')
+        ?.getAttribute('aria-label'),
+    }));
+    check('고른 전시실의 이름이 나온다', shown.name.length > 0, shown.name);
+    check(
+      '칸마다 이름이 aria-label 로 붙어 있다',
+      Boolean(shown.label) && shown.label.length > 0,
+      shown.label,
+    );
+
+    // 다른 방을 고르면 이름도 따라간다
+    await page.click('#search-room-row .segment[data-room="26"]');
+    await page.waitForTimeout(150);
+    const after = await page.evaluate(() =>
+      document.getElementById('search-room-name').textContent.trim(),
+    );
+    check('방을 바꾸면 이름도 바뀐다', after !== shown.name && after === shown.label, `${shown.name} → ${after}`);
+  }
+
   await page.click('#search-room-row .segment[data-room="4"]');
   await page.waitForTimeout(100);
   check(
@@ -1144,14 +1168,35 @@ for (const size of ['mobile', 'desktop']) {
     });
     const room = record.find(([key]) => key === '전시실');
     check('기록에 전시실이 있다', room !== undefined, record.map(r => r[0]).join(' · '));
+
+    // `이름 · 번호` 형태다. 이름만 두면 찾기 모달(번호로 고른다)과 이어지지 않고,
+    // 번호만 두면 기억에 남지 않는다.
+    const parts = (room?.[1] ?? '').split('·').map(s => s.trim());
     check(
-      '전시실이 번호 / 전체 형태다',
-      room !== undefined && /^\d+ \/ \d+$/.test(room[1]),
+      '전시실이 이름과 번호를 함께 보여 준다',
+      parts.length === 2 && parts[0].length > 0 && /^\d+$/.test(parts[1]),
       room?.[1],
     );
-    const total = room ? Number(room[1].split('/')[1].trim()) : 0;
-    const index = room ? Number(room[1].split('/')[0].trim()) : 0;
+    check(
+      '전시실 이름이 한글이다',
+      /[가-힣]/.test(parts[0] ?? ''),
+      parts[0],
+    );
+    const index = Number(parts[1]);
+    const total = await page.evaluate(() => window.__museum.rooms.ROOMS.length);
     check('전시실 번호가 범위 안이다', index >= 1 && index <= total, `${index} / ${total}`);
+
+    // 좌표에서 유도한 방과 시트에 적힌 방이 같은가. 어긋나면 안내판이 거짓말이다.
+    const derived = await page.evaluate(() => {
+      const m = window.__museum;
+      const at = m.rooms.roomOf(BigInt(m.state.x), BigInt(m.state.y));
+      return { at, name: m.rooms.ROOMS[at].name };
+    });
+    check(
+      '시트의 전시실이 좌표에서 유도한 것과 같다',
+      index - 1 === derived.at,
+      `시트 ${index - 1} · 좌표 ${derived.at} (${derived.name})`,
+    );
   }
 
   // 영어로 바꾼다

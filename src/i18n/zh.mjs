@@ -66,5 +66,41 @@ export default {
   "toast.projectFailed": "无法从这幅画找到位置",
   "toast.roomUnreachable": "在那个展厅里没有找到位置",
   "toast.brokenUrl": "地址读不出来，改从别处开始",
-  "toast.offline": "没有网络也能看"
+  "toast.offline": "没有网络也能看",
+
+  // ── 展厅名称 ────────────────────────────────────────────────────────────
+  //
+  // 以「厅」为主，像美术馆的指示牌。不用日语的假名。
+  "room.BASE": "正厅",
+  "room.FLAT_MOSAIC": "瓷砖厅",
+  "room.WEAVE": "织造厅",
+  "room.HORIZON": "地平线厅",
+  "room.DIAGONAL": "光线厅",
+  "room.BLEED": "雾厅",
+  "room.ZONED_COLOUR": "色域厅",
+  "room.MONOCHROME": "单色厅",
+  "room.OPEN_LOOP": "格栅厅",
+  "room.REVERSED": "逆流厅",
+  "room.NEGATIVE": "负片厅",
+  "room.PASTEL": "淡彩厅",
+  "room.PRIMARY": "原色厅",
+  "room.HUE_RED": "朱红厅",
+  "room.HUE_AMBER": "琥珀厅",
+  "room.HUE_GREEN": "苍翠厅",
+  "room.HUE_CYAN": "青碧厅",
+  "room.HUE_BLUE": "靛蓝厅",
+  "room.HUE_VIOLET": "紫罗兰厅",
+  "room.DUO_BLUE_ORANGE": "黄昏印厅",
+  "room.DUO_RED_GREEN": "红绿厅",
+  "room.DUO_VIOLET_AMBER": "兰印厅",
+  // 双色印在这里更像水墨的浓淡。
+  "room.DUO_INK": "水墨厅",
+  "room.OPEN_MONO": "灰墙厅",
+  "room.RAIN": "雨厅",
+  "room.BLEED_PASTEL": "晨雾厅",
+  "room.FLAT_CYAN": "青瓷厅",
+  "room.DIAGONAL_DUO": "断层厅",
+  "room.MONO_PRIMARY": "艳色厅",
+  "room.REVERSED_DIAGONAL": "退潮厅",
+  "room.PIXEL_ART": "像素厅"
 };
