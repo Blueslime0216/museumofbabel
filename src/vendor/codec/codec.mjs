@@ -14,9 +14,8 @@ import {
   CANVAS,
   tierSpec,
   AMP_MULT,
-  LUMA_DC_STEP,
-  AC_STEP,
-  CHROMA_STEP,
+  QUANT_PROFILES,
+  decodeReserved,
   DC_BIAS,
   CHROMA_BIAS,
 } from './spec.mjs';
@@ -239,15 +238,42 @@ export function gatherReferences(luma, px0, py0, B, base, top, topRight, left) {
  * 디코더와 투영기가 **반드시 같은 식**을 써야 하므로 여기 한 곳에만 둔다.
  * 그래야 decode(project(img))가 투영 미리보기와 일치한다.
  */
-export function writeBlock(luma, px0, py0, B, logScale, pred, dcOffset, ampCoef, basisIndex) {
+export function writeBlock(
+  luma,
+  px0,
+  py0,
+  B,
+  logScale,
+  pred,
+  dcOffset,
+  ampCoef,
+  basisIndex,
+  basisBlend = 0,
+) {
   const patternBase = basisIndex * (BASIS_SIZE * BASIS_SIZE);
+  const last = BASIS_SIZE - 1;
+  // 혼합 방향. 이웃 기저 칸을 어느 쪽에서 끌어올지 정한다.
+  const stepX = basisBlend === 1 || basisBlend === 3 ? 1 : 0;
+  const stepY = basisBlend === 2 || basisBlend === 3 ? 1 : 0;
+
   for (let y = 0; y < B; y++) {
     const predRow = y * B;
     const lumaRow = (py0 + y) * CANVAS + px0;
-    const patternRow = patternBase + (y >> logScale) * BASIS_SIZE;
+    const sy = y >> logScale;
+    const patternRow = patternBase + sy * BASIS_SIZE;
+    // 이웃 행은 끝에서 자기 자신을 복제한다. 그래야 경계가 튀지 않는다.
+    const nyRow = patternBase + (sy + stepY > last ? last : sy + stepY) * BASIS_SIZE;
+
     for (let x = 0; x < B; x++) {
+      const sx = x >> logScale;
       // 기저는 8x8을 정수 배율로 복제해 확대한다. 블록 경계가 남는다.
-      const bval = BASIS[patternRow + (x >> logScale)];
+      let bval = BASIS[patternRow + sx];
+      if (basisBlend !== 0) {
+        const nx = sx + stepX > last ? last : sx + stepX;
+        // 이웃 칸과 반씩 섞는다. 단일 DCT 기저가 아닌 패턴이 나온다.
+        // >>는 산술 시프트라 음수에서도 결정론적이다.
+        bval = (bval + BASIS[nyRow + nx]) >> 1;
+      }
       let v = pred[predRow + x] + dcOffset + ((ampCoef * bval) >> BASIS_SHIFT);
       if (v < 0) v = 0;
       else if (v > 255) v = 255;
@@ -273,9 +299,16 @@ export function renderFields(spec, fields, frame) {
 
   const base = expand6(header.baseLuma);
   const quant = header.quant;
-  const dcStep = LUMA_DC_STEP[quant];
-  const acStep = AC_STEP[quant];
-  const chromaStep = CHROMA_STEP[quant];
+
+  // profile은 양자화 계열을 고른다. v1은 이 필드를 읽지 않아서 4개의 주소가
+  // 같은 그림을 냈다. 진법이 4이므로 값은 이미 0..3 안에 있다.
+  const tables = QUANT_PROFILES[header.profile];
+  const dcStep = tables.lumaDc[quant];
+  const acStep = tables.ac[quant];
+  const chromaStep = tables.chroma[quant];
+
+  // reserved는 기저 혼합(하위 2비트)과 크로마 어긋남(상위 2비트)으로 나뉜다.
+  const { basisBlend, chromaShift } = decodeReserved(header.reserved);
 
   // 1. 루마 평면 — 래스터 순서로 폐루프 재구성
   for (let by = 0; by < G; by++) {
@@ -297,6 +330,7 @@ export function renderFields(spec, fields, frame) {
         (fields.dc[bi] - DC_BIAS) * dcStep,
         AMP_MULT[fields.amp[bi]] * acStep,
         fields.basis[bi],
+        basisBlend,
       );
     }
   }
@@ -331,13 +365,20 @@ export function renderFields(spec, fields, frame) {
 
   // 3. YCbCr → RGB. 크로마는 최근접으로 2배 확대한다(의도적).
   //    BT.601 계수를 65536배 정수로 굳혔다.
+  // 크로마 평면을 반 블록씩 밀어 루마와 어긋내게 한다. reserved 상위 2비트.
+  // 밀린 만큼은 평면 끝에서 감긴다. CHROMA가 2의 거듭제곱이라 마스크로 된다.
+  const shiftMask = CHROMA - 1;
+  const halfChromaBlock = CB >> 1;
+  const shiftX = chromaShift & 1 ? halfChromaBlock : 0;
+  const shiftY = chromaShift & 2 ? halfChromaBlock : 0;
+
   let o = 0;
   for (let y = 0; y < CANVAS; y++) {
-    const chromaRow = (y >> 1) * CHROMA;
+    const chromaRow = (((y >> 1) + shiftY) & shiftMask) * CHROMA;
     const lumaRow = y * CANVAS;
     for (let x = 0; x < CANVAS; x++) {
       const Y = luma[lumaRow + x];
-      const cx = x >> 1;
+      const cx = ((x >> 1) + shiftX) & shiftMask;
       const cb = chromaB[chromaRow + cx] - 128;
       const cr = chromaR[chromaRow + cx] - 128;
       // Uint8ClampedArray가 0..255로 자동 클램프한다.

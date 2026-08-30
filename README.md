@@ -8,7 +8,7 @@ always yields the same artwork, every address is valid, and the pixels are
 computed in your browser.
 
 ```text
-?a=v1.8.4.<x>.<y>
+?a=v2.8.4.<x>.<y>
    ↓  parse       address string → { tier, locality, x, y }
    ↓  codec       coordinate → codeword   (mixed radix, bijective)
    ↓  codec       codeword → fields       (quantizer, prediction mode, DCT basis, …)

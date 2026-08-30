@@ -231,7 +231,7 @@ for (const level of ['log', 'info', 'warn', 'error', 'debug', 'trace']) {
 
 // ── 1 — 그림 ─────────────────────────────────────────────────────────────
 
-const ADDRESS = 'v1.8.4.abc.def';
+const ADDRESS = 'v2.8.4.abc.def';
 
 {
   const png = await call(art, { a: ADDRESS });
@@ -309,7 +309,7 @@ const ADDRESS = 'v1.8.4.abc.def';
   );
   check(
     '카드: og:url 이 사람이 갈 자리다',
-    /<meta property="og:url" content="https:\/\/demo-museumofbabel\.vercel\.app\/\?a=v1\.8\.4\.abc\.def"/.test(
+    /<meta property="og:url" content="https:\/\/demo-museumofbabel\.vercel\.app\/\?a=v2\.8\.4\.abc\.def"/.test(
       html,
     ),
   );
@@ -323,7 +323,7 @@ const ADDRESS = 'v1.8.4.abc.def';
 
   // 주소에 따옴표를 섞어 넣으려 해도 태그가 깨지지 않는다.
   // (parseHash 가 먼저 막지만, 막는 곳이 하나뿐이면 언젠가 새어 나온다)
-  const nasty = await call(card, { a: 'v1.8.4.abc.def" onload="alert(1)' });
+  const nasty = await call(card, { a: 'v2.8.4.abc.def" onload="alert(1)' });
   check(
     '카드: 이상한 주소는 카드를 만들지 않는다',
     nasty.status === 302,
@@ -334,7 +334,14 @@ const ADDRESS = 'v1.8.4.abc.def';
 // ── 3 — 거절 ─────────────────────────────────────────────────────────────
 
 {
-  for (const bad of [undefined, '', 'hello', 'v1.7.4.abc.def', 'v1.8.4.ABC.def']) {
+  for (const bad of [
+    undefined,
+    '',
+    'hello',
+    'v1.8.4.abc.def', // 낡은 버전
+    'v2.7.4.abc.def',
+    'v2.8.4.ABC.def',
+  ]) {
     const png = await call(art, { a: bad });
     check(`거절: 그림이 "${String(bad).slice(0, 16)}" 를 400 으로 막는다`, png.status === 400);
   }

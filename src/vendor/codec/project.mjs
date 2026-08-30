@@ -127,6 +127,17 @@ function projectWithQuant(spec, target, quant, baseLuma, baseCb, baseCr, scratch
   fields.header.baseLuma = baseLuma;
   fields.header.baseCb = baseCb;
   fields.header.baseCr = baseCr;
+
+  // 투영기는 기준 계열(profile 0, reserved 0)만 목표로 삼는다.
+  //
+  // 디코더는 profile 4종과 reserved 16종을 모두 해석하지만, 투영기가 그것까지
+  // 탐색하면 비용이 64배가 된다. quant 후보 16개와 곱해지므로 티어 16에서
+  // 도저히 못 쓴다.
+  //
+  // 이것은 손실을 감수하는 선택이며 불변식을 깨지 않는다. 투영기의 약속은
+  // "업로드한 이미지에 가까운 좌표 하나를 찾는다"이지 "가장 가까운 좌표를
+  // 찾는다"가 아니다. 기준 계열 안에서 가장 가까운 좌표를 찾는다.
+  // 그래서 아래 writeBlock 호출도 기저 혼합 없이(기본값 0) 부른다.
   fields.header.profile = 0;
   fields.header.reserved = 0;
 

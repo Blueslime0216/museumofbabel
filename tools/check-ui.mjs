@@ -56,7 +56,7 @@ const settled = page =>
   page.waitForFunction(() => window.__museum.curtain.open >= 0.999, null, { timeout: 25000 });
 
 /**
- * 주소창에 적힌 주소. 표준형은 `?a=v1.8.4.…` 이다 (hash.mjs 참조).
+ * 주소창에 적힌 주소. 표준형은 `?a=v2.8.4.…` 이다 (hash.mjs 참조).
  *
  * `#` 을 뗀 형태로 돌려준다. 시트가 보여 주는 주소와 견주기 쉽게.
  */
@@ -590,7 +590,7 @@ for (const size of ['mobile', 'desktop']) {
   await page.click('#btn-search');
   await page.waitForTimeout(200);
   await page.click('#search-floor-row .segment[data-tier="16"]');
-  await page.fill('#search-text', '#v1.4.4.abc.def');
+  await page.fill('#search-text', '#v2.4.4.abc.def');
   await page.click('#btn-go');
   await traveled(page);
   check(
@@ -785,7 +785,7 @@ for (const size of ['mobile', 'desktop']) {
   await page.waitForTimeout(300);
 
   const url = await page.evaluate(() => location.href);
-  check('주소창이 ?a= 형태다', /\?a=v1\.\d+\.\d+\./.test(url), url.slice(0, 60));
+  check('주소창이 ?a= 형태다', /\?a=v2\.\d+\.\d+\./.test(url), url.slice(0, 60));
   check('주소창에 해시가 없다', !url.includes('#'), url.slice(-40));
 
   // 복사 버튼이 주는 것이 바로 그 형태여야 한다

@@ -38,8 +38,8 @@ export function parseDestination(text, { tier = DEFAULT_TIER } = {}) {
   if (!trimmed) return null;
 
   // 전체 URL 이면 주소만 떼어 낸다. 두 형태를 다 받는다.
-  //   지금 형태  https://…/?a=v1.8.4.…
-  //   옛 형태    https://…/#v1.8.4.…
+  //   지금 형태  https://…/?a=v2.8.4.…
+  //   옛 형태    https://…/#v2.8.4.…
   const query = /[?&]a=([^&#\s]+)/.exec(trimmed);
   if (query) {
     try {
@@ -52,7 +52,7 @@ export function parseDestination(text, { tier = DEFAULT_TIER } = {}) {
   const hashAt = trimmed.indexOf('#');
   const candidate = hashAt >= 0 ? trimmed.slice(hashAt) : trimmed;
 
-  // #v1.… 또는 v1.…
+  // #v2.… 또는 v2.…
   const withHash = candidate.startsWith('#') ? candidate : `#${candidate}`;
   if (/^#v\d+\./.test(withHash)) {
     try {

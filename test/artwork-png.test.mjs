@@ -115,7 +115,7 @@ test('픽셀 수가 안 맞으면 던진다', () => {
 });
 
 test('전시물 PNG 가 코덱의 픽셀과 같다', () => {
-  const state = readAddress('v1.8.4.abc.def');
+  const state = readAddress('v2.8.4.abc.def');
   assert.ok(state, '주소를 읽었다');
 
   const png = renderArtworkPng(state, CARD_SIZE);
@@ -156,7 +156,7 @@ test('전시물 PNG 가 코덱의 픽셀과 같다', () => {
 
 test('Up 필터가 파일을 실제로 줄인다', () => {
   // 우리 그림은 구역이 납작해서 같은 행이 이어진다. 필터가 그것을 0 으로 만든다.
-  const state = readAddress('v1.8.4.abc.def');
+  const state = readAddress('v2.8.4.abc.def');
   const png = renderArtworkPng(state, CARD_SIZE);
   const rawSize = CARD_SIZE * CARD_SIZE * 3;
   assert.ok(
@@ -168,7 +168,7 @@ test('Up 필터가 파일을 실제로 줄인다', () => {
 // ── 3 — 도장 ─────────────────────────────────────────────────────────────
 
 test('PNG 에 주소가 적혀 있다', () => {
-  const state = readAddress('#v1.4.4.abc.def');
+  const state = readAddress('#v2.4.4.abc.def');
   const png = renderArtworkPng(state, 512);
   assert.equal(readStamp(png), formatHash(state));
 });
@@ -176,10 +176,10 @@ test('PNG 에 주소가 적혀 있다', () => {
 // ── 4 — 주소 읽기 ────────────────────────────────────────────────────────
 
 test('주소는 # 이 있어도 없어도 읽힌다', () => {
-  const withHash = readAddress('#v1.8.4.abc.def');
-  const without = readAddress('v1.8.4.abc.def');
+  const withHash = readAddress('#v2.8.4.abc.def');
+  const without = readAddress('v2.8.4.abc.def');
   assert.deepEqual(withHash, without);
-  assert.equal(addressText(withHash), 'v1.8.4.abc.def');
+  assert.equal(addressText(withHash), 'v2.8.4.abc.def');
 });
 
 test('이상한 주소는 null 이다', () => {
@@ -190,12 +190,13 @@ test('이상한 주소는 null 이다', () => {
     undefined,
     'hello',
     'v9.8.4.abc.def', // 버전이 다르다
-    'v1.7.4.abc.def', // 없는 층
-    'v1.8.99.abc.def', // 없는 국소성 단계
-    'v1.8.4.ABC.def', // 대문자
-    'v1.8.4.abc', // 축이 하나
-    `v1.4.4.${'z'.repeat(200)}.def`, // 층 4 의 축을 넘는 값
-    `v1.8.4.${'z'.repeat(5000)}.def`, // 너무 길다
+    'v1.8.4.abc.def', // 낡은 버전. v2에서 렌더 의미가 바뀌었으므로 받아 주면 안 된다
+    'v2.7.4.abc.def', // 없는 층
+    'v2.8.99.abc.def', // 없는 국소성 단계
+    'v2.8.4.ABC.def', // 대문자
+    'v2.8.4.abc', // 축이 하나
+    `v2.4.4.${'z'.repeat(200)}.def`, // 층 4 의 축을 넘는 값
+    `v2.8.4.${'z'.repeat(5000)}.def`, // 너무 길다
   ]) {
     assert.equal(readAddress(bad), null, `"${String(bad).slice(0, 24)}" 는 null`);
   }
@@ -203,7 +204,7 @@ test('이상한 주소는 null 이다', () => {
 
 test('층마다 다 읽힌다', () => {
   for (const tier of [4, 8, 16]) {
-    const state = readAddress(`v1.${tier}.4.abc.def`);
+    const state = readAddress(`v2.${tier}.4.abc.def`);
     assert.ok(state, `층 ${tier}`);
     assert.equal(state.tier, tier);
   }

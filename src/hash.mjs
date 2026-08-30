@@ -38,7 +38,7 @@ const axisBitsFor = tier => tierSpec(tier).axisBits;
 
 /** 상태 → 주소창에 넣을 문자열. `?a=…` 형태다. */
 export function queryFor(state) {
-  // 우리 주소는 `[0-9a-z.]` 와 `v1` 뿐이라 인코딩할 것이 없다. 그래도 규칙은 지킨다.
+  // 우리 주소는 `[0-9a-z.]` 와 `v2` 뿐이라 인코딩할 것이 없다. 그래도 규칙은 지킨다.
   return `?${PARAM}=${encodeURIComponent(formatHash(state).slice(1))}`;
 }
 

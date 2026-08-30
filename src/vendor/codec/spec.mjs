@@ -102,6 +102,73 @@ export const DC_BIAS = 16;
 /** cb/cr 필드의 중앙값. */
 export const CHROMA_BIAS = 8;
 
+// ── profile: 양자화 계열 ─────────────────────────────────────────────────
+//
+// profile은 진법 4다. 즉 주소에 이미 2비트가 들어 있었는데 v1은 읽지 않았다.
+// 그 결과 profile만 다른 4개의 주소가 완전히 같은 그림을 냈다.
+// reserved(진법 16)까지 합치면 64개의 주소가 한 그림에 겹쳐 있었다.
+//
+// 이제 profile은 양자화 표 세 개를 한 묶음으로 고른다.
+// 표를 새로 늘리지 않고(기저 표를 추가하면 번들이 60KB 늘어난다) 이미 있는
+// 스텝 표의 모양만 바꾼다. 그래서 비용이 0이고 그림 가짓수는 4배가 된다.
+//
+// 0번은 반드시 v1의 표와 같아야 한다. 기준 계열이고, 투영기가 쓰는 계열이다.
+//
+// 주의: 아래 1~3번의 구체적 수치는 잠정이다. 미감은 실시간 튜닝 도구로
+// 눈으로 보면서 확정할 예정이므로, 여기서는 "서로 분명히 다른 네 가지"만
+// 보장하는 선에서 골랐다. 순수 데이터라 언제든 바꿔도 전단사는 안 깨진다.
+
+/** profile 1 — 안개. 전부 낮은 스텝. 뿌옇고 저채도. */
+const SOFT_DC_STEP = [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7];
+const SOFT_AC_STEP = [1, 1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8];
+const SOFT_CHROMA_STEP = [1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 8];
+
+/** profile 2 — 판화. 밝기는 세게, 색은 죽인다. 거의 흑백 그래픽. */
+const GRAPHIC_DC_STEP = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+const GRAPHIC_AC_STEP = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18];
+const GRAPHIC_CHROMA_STEP = [1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6];
+
+/** profile 3 — 채색. 밝기는 얕게, 색을 밀어붙인다. */
+const VIVID_DC_STEP = [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 9];
+const VIVID_AC_STEP = [1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+const VIVID_CHROMA_STEP = [1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 21, 22, 23, 24];
+
+/**
+ * profile 값 → 양자화 표 묶음.
+ *
+ * 0번은 최상위 표(LUMA_DC_STEP 등)를 그대로 참조한다. 사본이 아니다.
+ * 그래야 표를 고칠 자리가 한 곳으로 남는다.
+ */
+export const QUANT_PROFILES = [
+  { name: 'BASE', lumaDc: LUMA_DC_STEP, ac: AC_STEP, chroma: CHROMA_STEP },
+  { name: 'SOFT', lumaDc: SOFT_DC_STEP, ac: SOFT_AC_STEP, chroma: SOFT_CHROMA_STEP },
+  { name: 'GRAPHIC', lumaDc: GRAPHIC_DC_STEP, ac: GRAPHIC_AC_STEP, chroma: GRAPHIC_CHROMA_STEP },
+  { name: 'VIVID', lumaDc: VIVID_DC_STEP, ac: VIVID_AC_STEP, chroma: VIVID_CHROMA_STEP },
+];
+
+// ── reserved: 기저 혼합과 크로마 어긋남 ──────────────────────────────────
+//
+// reserved는 진법 16이므로 4비트다. 낮은 2비트를 기저 혼합에, 높은 2비트를
+// 크로마 어긋남에 쓴다.
+//
+// 왜 기저 "혼합"인가:
+//   전치나 부호 반전은 쓸 수 없다. DCT 기저 집합은 그 연산에 닫혀 있어서
+//   전치한 기저 k는 이미 표 안의 다른 기저 k'다. 그러면 그림이 새로 생기지 않고
+//   같은 그림에 다른 주소만 붙는다 — 지금 고치려는 문제가 그대로 남는다.
+//   반면 이웃한 기저 칸끼리 섞은 패턴은 단일 DCT 기저가 아니므로 진짜 새 패턴이다.
+//   그리고 basisScale이 1인 티어(32층)에서도 동작한다. 확대 배율에 기대지 않는다.
+
+/** reserved 하위 2비트 → 기저 혼합 방식. */
+export const BASIS_BLEND_NAMES = ['PLAIN', 'SOFT_H', 'SOFT_V', 'SOFT_D'];
+
+/** reserved 상위 2비트 → 크로마 평면을 반 블록씩 어긋내는 방식. */
+export const CHROMA_SHIFT_NAMES = ['ALIGNED', 'SHIFT_H', 'SHIFT_V', 'SHIFT_HV'];
+
+/** reserved 한 값을 두 손잡이로 나눈다. */
+export function decodeReserved(reserved) {
+  return { basisBlend: reserved & 3, chromaShift: (reserved >> 2) & 3 };
+}
+
 // ── 스펙 빌더 ────────────────────────────────────────────────────────────
 
 function bitsOf(radix) {

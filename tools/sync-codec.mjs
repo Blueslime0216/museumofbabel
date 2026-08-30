@@ -25,10 +25,49 @@ import { join, resolve } from 'node:path';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const appRoot = resolve(here, '..');
-const groupRoot = resolve(appRoot, '..');
 
-/** 본체 코덱 소스. 저장소 밖이므로 배포 환경에는 없다. */
-const SOURCE_DIR = join(groupRoot, '01_혼합진법 주소', 'src');
+/**
+ * 본체 코덱 소스를 찾는다. 저장소 밖이므로 배포 환경에는 없다.
+ *
+ * 왜 위로 훑는가 (전에 조용히 깨졌던 자리다):
+ *   원래 이 스크립트는 `../01_혼합진법 주소/src` 하나만 봤다. 저장소가
+ *   `005 - 최종 알고리즘 테스트/02_데모 웹` 이던 시절에는 본체가 형제 폴더라
+ *   맞았다. 저장소를 `008 - 바벨의 미술관/바벨의 미술관` 으로 옮긴 뒤
+ *   그 경로가 사라졌는데, 스크립트는 그것을 "배포 환경"으로 오인해서
+ *   복사를 건너뛰고 **낡은 사본을 자기 기록과만 비교하며 통과**시켰다.
+ *   검사가 초록이어도 사본이 본체와 다를 수 있었다는 뜻이다.
+ *
+ *   그래서 이제 조상 디렉터리를 몇 단계 훑으며 알려진 상대 경로를 찾는다.
+ *   찾지 못하면 그때는 진짜 배포 환경으로 본다.
+ *
+ * 환경 변수로 직접 지정할 수도 있다. BABEL_CODEC_SRC
+ */
+const SOURCE_CANDIDATES = [
+  join('01_혼합진법 주소', 'src'),
+  join('005 - 최종 알고리즘 테스트', '01_혼합진법 주소', 'src'),
+];
+
+function findSourceDir() {
+  const override = process.env.BABEL_CODEC_SRC;
+  if (override) {
+    const path = resolve(override);
+    if (!existsSync(path)) {
+      fail(`BABEL_CODEC_SRC 가 가리키는 경로가 없다: ${path}`);
+    }
+    return path;
+  }
+  let dir = appRoot;
+  for (let up = 0; up < 6; up++) {
+    for (const relative of SOURCE_CANDIDATES) {
+      const path = join(dir, relative);
+      if (existsSync(path)) return path;
+    }
+    const parent = resolve(dir, '..');
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
 
 /** 이 저장소 안의 복사본. 커밋한다. */
 const VENDOR_DIR = join(appRoot, 'src', 'vendor', 'codec');
@@ -73,7 +112,9 @@ function fail(message, hint) {
 
 // ── 원본이 없는 환경 (배포) ──────────────────────────────────────────────
 
-if (!existsSync(SOURCE_DIR)) {
+const SOURCE_DIR = findSourceDir();
+
+if (SOURCE_DIR === null) {
   const manifest = readManifest();
   if (!manifest) {
     fail(
