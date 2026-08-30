@@ -347,3 +347,56 @@ export function lobbyObjects({ date = new Date(), patrons = [] } = {}) {
 
   return objects;
 }
+
+// ── 체험관 ───────────────────────────────────────────────────────────────
+//
+// 체험관은 로비와 같은 층(0)이고 같은 크기(64x64)로 감긴다. 다른 곳은 놓인
+// 물건뿐이다. 어느 쪽에 있는지는 주소가 아니라 `?w=1` 이 정한다 — 이유는
+// hash.mjs 의 PARAM_WORKSHOP 에 적어 두었다.
+//
+// 바닥을 로비와 같게 두는 이유: 벽 색과 칸 무늬가 바뀌면 "로비에 있는 방" 이
+// 아니라 다른 건물이 된다. 걸어 들어간 곳이 여전히 로비 안이라는 감각은 바닥이
+// 같아야 유지된다. 여기가 체험관임을 말해 주는 것은 놓인 물건이다.
+
+/** QR 포털 한 변(칸). 체험관에서 가장 큰 물건이다. */
+const QR_SIZE = 7;
+
+/**
+ * 체험관에 놓을 물건 전체.
+ *
+ * 날짜를 받지 않는다. 체험관은 도구가 놓인 방이고, 도구는 날마다 자리를 바꾸면
+ * 안 된다. 오늘의 그림처럼 바뀌는 것은 로비의 몫이다.
+ *
+ *   1. QR 포털   가운데. 들어오면 바로 앞에 있다
+ *   2. 돌아가는 문   로비의 체험관 문과 **같은 좌표**다
+ *
+ * 문을 같은 좌표에 두는 것은 우연이 아니다. 로비 (32,43)의 문으로 들어왔으면
+ * 체험관 (32,43)에 돌아가는 문이 있다. 문 하나가 두 방을 잇는 것처럼 보인다.
+ */
+export function workshopObjects() {
+  const centre = Number(LOBBY_SPAN / 2n);
+  return [
+    {
+      id: 'qr',
+      kind: 'art',
+      x: centre,
+      y: centre,
+      size: QR_SIZE,
+      labelKey: 'lobby.qr',
+      action: 'qr',
+      // 이것도 좌표에서 나온 그림이다. QR 처럼 보이는 그림을 그려 넣지 않는다 —
+      // 이 미술관의 모든 픽셀은 주소에서 계산된다는 규칙이 표지에도 적용된다.
+      address: { tier: 16, locality: LOBBY_LOCALITY, x: 0x7c3a91e04dn, y: 0x1f6b8d2a05n },
+    },
+    {
+      id: 'exit',
+      kind: 'art',
+      x: centre,
+      y: centre + 11,
+      size: WORKSHOP_SIZE,
+      labelKey: 'lobby.exit',
+      action: 'lobby',
+      address: { tier: 8, locality: LOBBY_LOCALITY, x: 0x3d05be7192n, y: 0x6a24c0f83bn },
+    },
+  ];
+}

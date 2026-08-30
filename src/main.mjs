@@ -23,7 +23,7 @@ import {
   createFrame,
   styleAt,
 } from './codec.mjs';
-import { lobbyHome, lobbyObjects } from './lobby.mjs';
+import { lobbyHome, lobbyObjects, workshopObjects } from './lobby.mjs';
 import { PATRONS } from './patrons.mjs';
 import { createCamera, MIN_CELL } from './camera.mjs';
 import { zoomBudgetFor, isDeepestFloor } from './floors.mjs';
@@ -245,7 +245,8 @@ async function prepareLobby() {
     return;
   }
 
-  const objects = lobbyObjects({ patrons: PATRONS });
+  // 같은 층에 방이 둘이다. 로비와 체험관은 바닥이 같고 놓인 물건만 다르다.
+  const objects = state.workshop ? workshopObjects() : lobbyObjects({ patrons: PATRONS });
 
   await Promise.all(
     objects.map(async object => {
@@ -279,9 +280,25 @@ function tapLobbyObject(object) {
     return;
   }
 
-  // 체험관은 아직 문만 있다. 안이 비어 있는데 들여보내면 나오는 길을 찾아야 한다.
+  // 체험관으로 들어간다. 층은 그대로다 — 같은 로비 층의 다른 방이다.
+  // 도착 자리는 가운데(lobbyHome)이고, 거기 QR 포털이 서 있다.
   if (object.action === 'workshop') {
-    toast(t('toast.workshopSoon'));
+    goto({ ...lobbyHome(), workshop: true });
+    return;
+  }
+
+  // 체험관에서 로비로 돌아온다. 문이 양쪽에 같은 좌표로 있다.
+  if (object.action === 'lobby') {
+    goto({ ...lobbyHome(), workshop: false });
+    return;
+  }
+
+  // QR 만들기는 별도 페이지(museumofbabel.org/qr)의 자리다. 아직 없다.
+  //
+  // 지금 링크를 걸어 두면 404 로 나간다. 미술관 안에서 알리고 여기 남는 쪽이
+  // 낫다 — 나갔다가 돌아오는 길은 브라우저의 뒤로 가기뿐이다.
+  if (object.action === 'qr') {
+    toast(t('toast.qrSoon'));
   }
 }
 
@@ -318,6 +335,9 @@ function goto(next, { first = false } = {}) {
 
   const prepare = async () => {
     state = { ...state, ...next };
+    // 체험관 표시는 로비 층에서만 뜻이 있다. 작품 층으로 나가면 지운다.
+    // 안 지우면 state 에 남아서 작품 주소에 `&w=1` 이 따라붙는다.
+    if (!isLobbyTier(state.tier)) state.workshop = false;
     applyWorld();
     camera.forceZoom(restZoom * OPEN_FROM);
     hash.set(state);
@@ -352,7 +372,9 @@ function jumpRandom(tier = state.tier) {
   // 로비는 순환 공간이 작으므로 무작위로 던지지 않고 가운데로 보낸다.
   // 64x64 안에서 "무작위"는 뜻이 없고, 로비는 헤매는 곳이 아니다.
   if (isLobbyTier(tier)) {
-    goto({ tier, ...lobbyHome() });
+    // 체험관에 있었다면 로비로 나온다. "로비로 간다" 가 체험관 가운데로 가는
+    // 것이면 나오는 길이 문 하나로 줄어든다.
+    goto({ tier, ...lobbyHome(), workshop: false });
     return;
   }
   const [x, y] = randomCoordinate(axisBitsFor(tier));
@@ -661,7 +683,13 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 Object.assign(window, {
   __museum: {
     get state() {
-      return { ...state, x: String(state.x), y: String(state.y) };
+      return {
+        ...state,
+        x: String(state.x),
+        y: String(state.y),
+        // 체험관에 있는가. 없을 때 undefined 로 새지 않게 여기서 굳힌다.
+        workshop: Boolean(state.workshop),
+      };
     },
     get camera() {
       return {

@@ -1693,11 +1693,65 @@ for (const size of ['mobile', 'desktop']) {
     );
     check('표지 아래 11칸에 체험관 문이 있다', found === 'workshop', String(found));
 
-    const before = await page.locator('.toast').count();
+    // 문을 누르면 체험관으로 들어간다.
     await page.mouse.click(aim[0], aim[1]);
+    await traveled(page);
+
+    const inside = await page.evaluate(() => ({
+      workshop: window.__museum.state.workshop,
+      tier: window.__museum.state.tier,
+      search: location.search,
+      ids: window.__museum.lobby.map(object => object.id),
+      images: window.__museum.lobby.every(object => object.hasImage),
+    }));
+    check('체험관 문을 누르면 체험관에 들어간다', inside.workshop === true, String(inside.workshop));
+    // 체험관은 로비와 같은 층이다. "로비에 있는 방" 이라는 설정이 이것이다.
+    check('체험관도 로비와 같은 층이다', inside.tier === 0, String(inside.tier));
+    check(
+      '체험관이 주소에 w=1 로 남는다',
+      /[?&]w=1(?:&|$)/.test(inside.search),
+      inside.search,
+    );
+    check(
+      '체험관에는 QR 포털과 나가는 문이 있다',
+      inside.ids.length === 2 && inside.ids.includes('qr') && inside.ids.includes('exit'),
+      inside.ids.join(','),
+    );
+    // 체험관에는 이미지 파일이 없다. 두 장 다 주소에서 그린 것이다.
+    check('체험관의 그림이 모두 그려졌다', inside.images === true);
+
+    // 가운데의 QR 포털을 누르면 아직 준비 중임을 알린다. 별도 페이지가 없다.
+    const before = await page.locator('.toast').count();
+    const middle = await page.evaluate(() => [window.innerWidth / 2, window.innerHeight / 2]);
+    await page.mouse.click(middle[0], middle[1]);
     await page.waitForTimeout(600);
     const after = await page.locator('.toast').count();
-    check('체험관 문을 누르면 준비 중임을 알린다', after > before, `토스트 ${before} → ${after}`);
+    check('QR 포털을 누르면 준비 중임을 알린다', after > before, `토스트 ${before} → ${after}`);
+
+    // 새로고침해도 체험관에 남는다. 주소가 좌표만이 아니라 방까지 담는다는 뜻이다.
+    await page.reload({ waitUntil: 'commit' });
+    await page.waitForFunction(() => window.__museum, null, { timeout: 20000 });
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    const again = await page.evaluate(() => window.__museum.state.workshop);
+    check('새로 열어도 체험관에 남는다', again === true, String(again));
+
+    // 나가는 문으로 로비에 돌아온다. 문은 도착 자리에서 11칸 아래다.
+    const door = await page.evaluate(() => {
+      const zoom = window.__museum.camera.zoom;
+      return [window.innerWidth / 2, window.innerHeight / 2 + 11 * zoom];
+    });
+    await page.mouse.click(door[0], door[1]);
+    await traveled(page);
+    const back = await page.evaluate(() => ({
+      workshop: window.__museum.state.workshop,
+      search: location.search,
+      logo: window.__museum.lobby.some(object => object.kind === 'logo'),
+    }));
+    check('나가는 문으로 로비에 돌아온다', back.workshop === false, String(back.workshop));
+    check('로비로 돌아오면 주소에서 w 가 빠진다', !/[?&]w=/.test(back.search), back.search);
+    check('로비로 돌아오면 표지가 다시 있다', back.logo === true);
   }
 
   // 화면에 로비가 넓게 보인다. 물건 하나가 화면을 덮으면 장소로 읽히지 않는다.

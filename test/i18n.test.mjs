@@ -86,6 +86,17 @@ test('어느 사전도 번역을 빠뜨리지 않았다', () => {
 //
 // meta.language 는 영어 이름이고 meta.native 는 자국어 표기다. 둘 다 건너뛴다.
 // 자리표시자(`{level}`)와 숫자·기호는 어느 언어에나 있으므로 지운 뒤에 본다.
+/**
+ * 어느 언어에서도 로마자로 쓰는 약어.
+ *
+ * QR 은 규격의 이름이다. 한국어 "QR 코드" · 일본어 "QRコード" · 러시아어
+ * "QR-код" 가 모두 표준 표기이고, 풀어서 옮기면(“빠른 응답 부호”) 오히려 아무도
+ * 못 알아본다. 중국어만 자기 낱말(二维码)이 있어서 그것을 쓴다.
+ *
+ * 이 목록은 좁게 유지한다. 넓히면 번역을 잊은 것을 놓치는 구멍이 된다.
+ */
+const INITIALISMS = /QR/g;
+
 const SCRIPTS = {
   ko: /[가-힣]/,
   ja: /[\u3040-\u30ff\u3400-\u9fff]/,
@@ -104,7 +115,10 @@ for (const [code, script] of Object.entries(SCRIPTS)) {
   test(`${code} 사전에 영어 낱말이 남지 않았다`, () => {
     for (const [key, value] of Object.entries(tables[code])) {
       if (key.startsWith('meta.')) continue;
-      const latin = value.replace(/\{\w+\}/g, '').match(/[A-Za-z]{2,}/g);
+      const latin = value
+        .replace(/\{\w+\}/g, '')
+        .replace(INITIALISMS, '')
+        .match(/[A-Za-z]{2,}/g);
       assert.equal(latin, null, `${code}.${key} 에 영어가 남았다: ${latin?.join(' · ')}`);
     }
   });

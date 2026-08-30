@@ -30,6 +30,7 @@ import {
   DEFAULT_TIER,
   DEFAULT_LOCALITY,
   LOBBY_TIER,
+  isLobbyTier,
   randomCoordinate,
 } from './codec.mjs';
 import { lobbyHome } from './lobby.mjs';
@@ -40,10 +41,29 @@ const MIN_GAP_MS = 500;
 export const PARAM = 'a';
 
 
+/**
+ * 체험관에 있는지 나타내는 쿼리. 값이 `1` 이면 체험관이다.
+ *
+ * ── 왜 층이 아니라 쿼리인가 ──────────────────────────────────────────────
+ *
+ * 체험관은 "로비에 있는 방" 이라는 설정이므로 로비와 같은 층(0)을 쓴다. 그래서
+ * 좌표만으로는 로비와 구분되지 않고, 어딘가에 한 비트가 더 필요하다.
+ *
+ * 주소 안에 넣지 않는다. 층 색인은 `ADDRESSABLE_TIERS` 의 순서이고, 거기에 값을
+ * 끼우면 **이미 나간 모든 주소가 다른 층을 가리킨다.** 끝에 붙이면 색인은
+ * 보존되지만 그때는 코덱을 고치고 다시 동기화해야 한다. 얻는 것에 비해 비싸다.
+ *
+ * 작품 주소의 순수성을 해치지도 않는다. 이 쿼리는 **작품이 없는 층에서만** 뜻이
+ * 있고, 작품 층 주소에는 아예 붙지 않는다. 로비가 이미 작품 공간 밖이라는 사실의
+ * 연장이다.
+ */
+export const PARAM_WORKSHOP = 'w';
+
 /** 상태 → 주소창에 넣을 문자열. `?a=…` 형태다. */
 export function queryFor(state) {
   // 주소는 영숫자뿐이라(base62) 인코딩할 것이 없다. 그래도 규칙은 지킨다.
-  return `?${PARAM}=${encodeURIComponent(formatHash(state).slice(1))}`;
+  const address = `?${PARAM}=${encodeURIComponent(formatHash(state).slice(1))}`;
+  return state.workshop ? `${address}&${PARAM_WORKSHOP}=1` : address;
 }
 
 /**
@@ -52,7 +72,13 @@ export function queryFor(state) {
  * 부르는 쪽이 살아 있는 state 객체를 그대로 넘기기도 한다. 참조를 들고 있으면
  * 나중에 그 객체가 바뀌어도 "같다" 로 판정해서 주소창이 멈춘다.
  */
-const snapshot = ({ tier, locality, x, y }) => ({ tier, locality, x, y });
+const snapshot = ({ tier, locality, x, y, workshop }) => ({
+  tier,
+  locality,
+  x,
+  y,
+  workshop: Boolean(workshop),
+});
 
 /**
  * 두 상태가 같은 자리인가.
@@ -71,7 +97,8 @@ function sameSpot(a, b) {
     a.tier === b.tier &&
     a.locality === b.locality &&
     a.x === b.x &&
-    a.y === b.y
+    a.y === b.y &&
+    Boolean(a.workshop) === Boolean(b.workshop)
   );
 }
 
@@ -117,11 +144,27 @@ export function readLegacyHash() {
  * `legacy` 가 참이면 옛 `#` 형태로 들어온 것이다. 표준형으로 바꾸는 일은
  * 첫 이동에서 `set` 이 알아서 한다 (`commit` 이 해시를 남기지 않는다).
  */
+/**
+ * 체험관 쿼리를 상태에 얹는다.
+ *
+ * **작품 층에서는 무시한다.** 작품 층에 `?w=1` 이 붙은 주소는 뜻이 없고, 그것을
+ * 살려 두면 "체험관에 걸린 층 16 작품" 같은 있을 수 없는 상태가 생긴다. 로비
+ * 층에서만 방을 가른다.
+ */
+function withWorkshop(state) {
+  if (!isLobbyTier(state.tier)) return state;
+  const flag = new URLSearchParams(location.search).get(PARAM_WORKSHOP);
+  return flag === '1' ? { ...state, workshop: true } : state;
+}
+
 export function readState() {
   const query = new URLSearchParams(location.search).get(PARAM);
   if (query) {
     try {
-      return { ...parseHash(`#${query.replace(/^#/, '')}`, axisBitsFor), fromUrl: true };
+      return withWorkshop({
+        ...parseHash(`#${query.replace(/^#/, '')}`, axisBitsFor),
+        fromUrl: true,
+      });
     } catch {
       // 남이 준 깨진 주소다. 조용히 무시하지 않고 호출한 쪽이 알린다.
       // 입구로 돌려보낸다 — 무작위 좌표에 던지면 알림을 읽는 동안에도

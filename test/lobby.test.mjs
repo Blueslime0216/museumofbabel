@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 
 import {
   lobbyObjects,
+  workshopObjects,
   daySeed,
   LOBBY_SPAN,
   LOGO_SIZE,
@@ -167,4 +168,63 @@ test('후원자가 오늘의 그림보다 먼저 자리를 잡는다', () => {
   const patronAt = objects.findIndex(object => object.name === 'A');
   const firstToday = objects.findIndex(object => object.id.startsWith('today-'));
   assert.ok(patronAt < firstToday, `후원자 ${patronAt} · 오늘의 그림 ${firstToday}`);
+});
+
+// ── 체험관 ───────────────────────────────────────────────────────────────
+
+test('체험관은 날짜와 무관하게 같다', () => {
+  // 도구가 놓인 방이므로 날마다 자리가 바뀌면 안 된다. 인자도 받지 않지만,
+  // 두 번 불러 같은지 보는 것으로 숨은 상태가 없다는 것까지 확인한다.
+  assert.deepEqual(workshopObjects(), workshopObjects());
+});
+
+test('체험관 물건이 겹치지 않는다', () => {
+  const objects = workshopObjects();
+  for (let i = 0; i < objects.length; i++) {
+    for (let j = i + 1; j < objects.length; j++) {
+      assert.ok(
+        apart(objects[i], objects[j]),
+        `${objects[i].id} 와 ${objects[j].id} 가 겹친다`,
+      );
+    }
+  }
+});
+
+test('체험관 가운데에 QR 포털이 있다', () => {
+  // 들어오면 바로 앞에 있어야 한다. 도착 자리가 lobbyHome(가운데)이다.
+  const qr = workshopObjects().find(object => object.id === 'qr');
+  assert.ok(qr, 'QR 포털이 없다');
+  assert.equal(qr.x, CENTRE);
+  assert.equal(qr.y, CENTRE);
+  assert.equal(qr.action, 'qr');
+});
+
+test('돌아가는 문이 로비의 체험관 문과 같은 좌표다', () => {
+  // 문 하나가 두 방을 잇는 것처럼 보이게 하는 성질이다. 한쪽만 옮기면 깨진다.
+  const door = lobbyObjects({ date: DAY }).find(object => object.id === 'workshop');
+  const exit = workshopObjects().find(object => object.id === 'exit');
+  assert.ok(exit, '나가는 문이 없다');
+  assert.equal(exit.x, door.x);
+  assert.equal(exit.y, door.y);
+  assert.equal(exit.action, 'lobby');
+});
+
+test('체험관 물건은 모두 주소에서 나온 그림이다', () => {
+  // 로비에는 로고(이미지 파일)가 하나 있지만 체험관에는 없다. QR 처럼 보이는
+  // 그림을 파일로 넣으면 "모든 픽셀은 주소에서 계산된다" 가 깨진다.
+  for (const object of workshopObjects()) {
+    assert.equal(object.kind, 'art', `${object.id} 가 그림이 아니다`);
+    assert.ok(object.address, `${object.id} 에 주소가 없다`);
+    const bits = BigInt(axisBitsFor(object.address.tier));
+    assert.ok(object.address.x < 1n << bits, `${object.id} 의 x 가 축을 넘는다`);
+    assert.ok(object.address.y < 1n << bits, `${object.id} 의 y 가 축을 넘는다`);
+  }
+});
+
+test('체험관 물건이 로비 경계 안에 있다', () => {
+  for (const object of workshopObjects()) {
+    const half = object.size / 2;
+    assert.ok(object.x - half >= 0 && object.x + half <= Number(LOBBY_SPAN));
+    assert.ok(object.y - half >= 0 && object.y + half <= Number(LOBBY_SPAN));
+  }
 });
