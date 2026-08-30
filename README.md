@@ -9,12 +9,34 @@ computed in your browser.
 
 ```text
 ?a=v2.8.4.<x>.<y>
-   ↓  parse       address string → { tier, locality, x, y }
+   ↓  parse       address string → { floor, locality, x, y }
    ↓  codec       coordinate → codeword   (mixed radix, bijective)
    ↓  codec       codeword → fields       (quantizer, prediction mode, DCT basis, …)
-   ↓  worker      fields → 256×256 pixels
+   ↓  rooms       coordinate → room       (which style reads those fields)
+   ↓  worker      fields + room → 256×256 pixels
    ↓  canvas      tiles laid out on an infinite grid
 ```
+
+## The building
+
+```text
+floor 0    lobby. no artworks. a 64×64 grid that wraps, so walking returns you
+floor 1    4×4 zones of 64px      address ~91 chars
+floor 2    8×8 zones of 32px              ~323
+floor 3    16×16 zones of 16px            ~1,253
+floor 4    32×32 zones of 8px             ~4,966
+```
+
+Each floor is a separate address space, and deeper floors show fewer works at
+once because they cost more to draw. There is no fifth floor: an 8×8 basis cannot
+scale into a block smaller than 8 pixels, so the tier list ends at 32.
+
+Every floor is divided into **exhibition rooms** — irregular Voronoi districts,
+roughly 160 cells across, each of which reads the same address bits a different
+way. One room keeps only the diagonal predictors, another flattens every block
+into a single colour, another derives colour from brightness like a two-ink
+print. The room costs nothing to store because it is derived from the coordinate
+itself, which also means you walk into a room rather than selecting one.
 
 - Demo of the previous iteration: <https://demo-museumofbabel.vercel.app>
 - Wiki explaining the concepts: <https://wiki-museumofbabel.vercel.app>
@@ -44,10 +66,10 @@ npm run preview    # serve the build on :4173
 ### Checks
 
 ```powershell
-npm test           # 80 unit tests
+npm test           # 83 unit tests
 npm run check      # tests + function checks + codec hash verification
 npm run check-api  # 43 checks; calls the serverless handlers directly
-npm run check-ui   # 101 checks; needs `npm run preview` running first
+npm run check-ui   # 114 checks; needs `npm run preview` running first
 ```
 
 `npm run check-ui` drives an already-installed Edge or Chrome through
