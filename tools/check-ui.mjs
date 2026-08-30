@@ -755,11 +755,13 @@ for (const size of ['mobile', 'desktop']) {
   }));
 
   check(
-    '전시실 선택이 "어디든" + 방 전부다',
-    rooms.chips.length === rooms.total + 1 && rooms.chips[0] === 'any',
+    '전시실 선택에 방이 전부 있다',
+    rooms.chips.length === rooms.total,
     `${rooms.chips.length}칸 / 방 ${rooms.total}개`,
   );
-  check('전시실 기본값이 "어디든" 이다', rooms.current === 'any', String(rooms.current));
+  // "어디든" 은 두지 않는다. 방을 강제하지 않으면 좌표가 아무 방에 떨어지고
+  // 그 방이 자기 방식으로 읽어서 올린 그림과 평균 10배 멀어진다(실측).
+  check('전시실 기본값이 기준 전시실이다', rooms.current === '0', String(rooms.current));
 
   await page.click('#search-room-row .segment[data-room="4"]');
   await page.waitForTimeout(100);

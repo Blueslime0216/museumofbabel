@@ -40,7 +40,7 @@ import {
   writeBlock,
 } from './codec.mjs';
 import { codeToCoordinates, localityMix } from './space.mjs';
-import { MODE_SETS, roomOf, roomStyle } from './rooms.mjs';
+import { MODE_SETS, roomOf, roomStyle, styleAt } from './rooms.mjs';
 
 /**
  * 시험해 볼 양자화 후보. 16개 전부.
@@ -782,7 +782,12 @@ export function projectRgba(rgba, tier, locality, options = {}) {
   }
 
   // 권위 있는 결과는 디코더가 그린 것이다. 그 방의 읽는 방식으로 그린다.
-  const frame = renderCode(spec, code, createFrame(spec), style);
+  //
+  // 방을 강제하지 않았으면 **좌표가 떨어진 방**으로 그린다. 기준 전시실로 그리면
+  // 안 된다. 미리보기는 관람객이 그 자리에 걸어 들어갔을 때 보게 될 것이어야 한다.
+  // (전시실을 렌더 경로에 연결한 뒤로 이 자리가 거짓말을 하고 있었다. 방이 31개고
+  //  그중 30개가 기준이 아니므로 거의 언제나 어긋났다.)
+  const frame = renderCode(spec, code, createFrame(spec), style ?? styleAt(x, y));
 
   return {
     x,

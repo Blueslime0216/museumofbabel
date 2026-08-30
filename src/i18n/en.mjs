@@ -44,7 +44,6 @@ export default {
   "search.uploadNote": "we walk to the nearest address",
   "search.floor": "Floor",
   "search.room": "Room",
-  "search.roomAny": "Any",
   "search.or": "or",
   "search.yours": "yours",
   "search.nearest": "nearest",

@@ -47,7 +47,6 @@ export default {
   "search.uploadNote": "いちばん近い場所まで歩きます",
   "search.floor": "階",
   "search.room": "展示室",
-  "search.roomAny": "どこでも",
   "search.or": "または",
   "search.yours": "あなたの絵",
   "search.nearest": "いちばん近い絵",

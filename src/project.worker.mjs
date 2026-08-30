@@ -33,8 +33,9 @@ self.onmessage = async event => {
     const source = toRgba(bitmap);
     bitmap.close?.();
 
-    // room 을 주면 그 전시실의 읽는 방식으로 투영하고 좌표도 그 방 안으로 옮긴다.
-    // null 이면 방을 강제하지 않는다 (기본값).
+    // room 은 그 전시실의 읽는 방식으로 투영하고 좌표도 그 방 안으로 옮긴다.
+    // 주지 않으면 방을 강제하지 않는데, 그때 투영기는 좌표가 떨어진 방으로
+    // 미리보기를 그린다. 어느 쪽이든 미리보기는 그 주소의 실제 그림이다.
     const result = projectRgba(
       source,
       tier,

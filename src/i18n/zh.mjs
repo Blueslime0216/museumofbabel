@@ -48,7 +48,6 @@ export default {
   "search.uploadNote": "带你走到最相近的位置",
   "search.floor": "层",
   "search.room": "展厅",
-  "search.roomAny": "任意",
   "search.or": "或者",
   "search.yours": "你的画",
   "search.nearest": "最相近的画",

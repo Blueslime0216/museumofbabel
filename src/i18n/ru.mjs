@@ -48,7 +48,6 @@ export default {
   "search.uploadNote": "мы дойдём до ближайшего адреса",
   "search.floor": "Этаж",
   "search.room": "Зал",
-  "search.roomAny": "Любой",
   "search.or": "или",
   "search.yours": "ваша",
   "search.nearest": "ближайшая",

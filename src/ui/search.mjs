@@ -97,13 +97,16 @@ export function createSearch({ toast, onGo, getWorld }) {
   let searchTier = getWorld().tier;
 
   /**
-   * 어느 전시실에서 찾을지. null 이면 "어디든" 이다.
+   * 어느 전시실에서 찾을지. 기본값은 기준 전시실(0번)이다.
    *
-   * 기본값을 "어디든" 으로 둔다. 방을 강제하면 그 방의 읽는 방식으로 투영해야
-   * 하므로 결과가 반드시 그 방의 분위기를 띤다. 올린 그림을 가장 잘 닮은 것을
-   * 원하는 사람에게 그것을 몰래 씌우면 안 된다.
+   * "어디든" 이라는 선택지는 두지 않는다. 방을 강제하지 않으면 투영기는 기준
+   * 전시실을 가정해 최적화하는데 좌표는 아무 방에나 떨어지고, 그 방이 그것을
+   * 자기 방식으로 읽는다. 실측하면 올린 그림과의 오차가 평균 10배(최악 34배)
+   * 나빠졌다 — 12개 표본 전부에서 나빴다. 아무도 원하지 않는 결과다.
+   *
+   * 그래서 찾기는 늘 어떤 방 안에서 찾는다. 기본이 기준 전시실일 뿐이다.
    */
-  let searchRoom = null;
+  let searchRoom = 0;
 
   function renderFloors() {
     // 로비는 뺀다. 찾기는 "이 그림에 가까운 작품" 을 찾는 것이고
@@ -134,17 +137,7 @@ export function createSearch({ toast, onGo, getWorld }) {
    * 든 방의 번호를 적어 와서 그 방 안에서 찾는 것이 이 기능의 쓰임새다.
    */
   function renderRooms() {
-    const any = document.createElement('button');
-    any.type = 'button';
-    any.className = 'segment';
-    any.dataset.room = 'any';
-    if (searchRoom === null) any.setAttribute('aria-current', 'true');
-    any.append(
-      Object.assign(document.createElement('span'), { textContent: t('search.roomAny') }),
-    );
-
     roomRow.replaceChildren(
-      any,
       ...ROOMS.map((_, index) => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -184,7 +177,7 @@ export function createSearch({ toast, onGo, getWorld }) {
   roomRow.addEventListener('click', event => {
     const button = event.target.closest('.segment');
     if (!button) return;
-    const next = button.dataset.room === 'any' ? null : Number(button.dataset.room);
+    const next = Number(button.dataset.room);
     if (next === searchRoom) return;
     searchRoom = next;
     renderRooms();
@@ -250,8 +243,7 @@ export function createSearch({ toast, onGo, getWorld }) {
 
       // 기다리는 동안 고른 것이 바뀌었다. 이 결과는 옛 조건의 것이다.
       // 화면에 보여 주지 않고 새 조건으로 다시 찾는다.
-      const stale =
-        message.tier !== searchTier || (searchRoom !== null && message.room !== searchRoom);
+      const stale = message.tier !== searchTier || message.room !== searchRoom;
       if (stale) {
         message.before?.close?.();
         message.after?.close?.();
@@ -294,9 +286,10 @@ export function createSearch({ toast, onGo, getWorld }) {
   function open() {
     reset();
     searchTier = getWorld().tier;
-    // 방은 지금 서 있는 방으로 맞추지 않는다. 열 때마다 "어디든" 이다.
-    // 걸어 들어간 방이 곧 찾고 싶은 방이라고 단정할 수 없다.
-    searchRoom = null;
+    // 방은 지금 서 있는 방으로 맞추지 않는다. 열 때마다 기준 전시실이다.
+    // 걸어 들어간 방이 곧 찾고 싶은 방이라고 단정할 수 없고, 기준 전시실이
+    // 올린 그림을 가장 잘 닮는다.
+    searchRoom = 0;
     renderFloors();
     renderRooms();
     scrim.hidden = false;
