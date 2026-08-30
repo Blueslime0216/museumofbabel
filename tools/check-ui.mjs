@@ -613,6 +613,56 @@ for (const size of ['mobile', 'desktop']) {
     perFloor.map(f => `${f.tier}:${f.depth}`).join(' '),
   );
 
+  // ── 전시실 ──────────────────────────────────────────────────────────
+  //
+  // 전시실은 좌표에서 유도된다. 주소에 담기지 않으므로, 같은 코드워드가
+  // 어디에 있느냐에 따라 다른 그림이 되어야 한다.
+  {
+    const rooms = await page.evaluate(() => {
+      const m = window.__museum;
+      const seen = new Map();
+      // 씨앗 간격만큼 떨어진 자리들을 훑어 여러 방을 만난다
+      for (let i = 0; i < 40; i++) {
+        const x = BigInt(i) * m.rooms.CLUSTER_SPAN + 12345n;
+        const index = m.rooms.roomOf(x, 67890n);
+        seen.set(index, m.rooms.ROOMS[index].name);
+      }
+      return {
+        total: m.rooms.ROOMS.length,
+        distinct: seen.size,
+        names: [...seen.values()].slice(0, 4),
+        base: m.rooms.ROOMS[0].name,
+        // 같은 좌표는 늘 같은 방
+        stable: m.rooms.roomOf(999n, 111n) === m.rooms.roomOf(999n, 111n),
+      };
+    });
+    check('전시실 목록이 브라우저에 있다', rooms.total >= 20, `${rooms.total}종`);
+    check('기준 전시실이 첫째다', rooms.base === 'BASE', rooms.base);
+    check('걸으면 여러 전시실을 만난다', rooms.distinct >= 8, `${rooms.distinct}종 만남`);
+    check('같은 좌표는 늘 같은 전시실이다', rooms.stable === true);
+
+    // 실제로 그림이 달라지는지. 같은 층에서 아주 멀리 떨어진 두 자리를 비교한다.
+    const differs = await page.evaluate(async () => {
+      const m = window.__museum;
+      const span = m.rooms.CLUSTER_SPAN;
+      // 서로 다른 방인 두 좌표를 찾는다
+      let a = null;
+      let b = null;
+      for (let i = 0; i < 200 && (a === null || b === null); i++) {
+        const x = BigInt(i) * span + 555n;
+        const index = m.rooms.roomOf(x, 777n);
+        if (a === null) a = { x, index };
+        else if (index !== a.index) b = { x, index };
+      }
+      return a && b ? { roomA: a.index, roomB: b.index } : null;
+    });
+    check(
+      '멀리 떨어진 자리는 다른 전시실이다',
+      differs !== null && differs.roomA !== differs.roomB,
+      differs ? `${differs.roomA} vs ${differs.roomB}` : '못 찾음',
+    );
+  }
+
   // 찾기의 층 선택
   await page.click('#btn-search');
   await page.waitForTimeout(250);

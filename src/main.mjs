@@ -13,6 +13,7 @@
 import { tierSpec, coordinatesToCode, localityMix, randomCoordinate } from './codec.mjs';
 import { createCamera, MIN_CELL } from './camera.mjs';
 import { zoomBudgetFor, isDeepestFloor } from './floors.mjs';
+import { ROOMS, CLUSTER_SPAN, roomOf } from './codec.mjs';
 import { createCurtainState, attachCurtain, PHASE } from './curtain.mjs';
 import { createTiles } from './tiles.mjs';
 import { createStage } from './stage.mjs';
@@ -443,6 +444,8 @@ Object.assign(window, {
     get tiles() {
       return tiles.stats;
     },
+    // 전시실. 화면 검사가 좌표 → 방 배정을 직접 확인한다.
+    rooms: { ROOMS, CLUSTER_SPAN, roomOf },
     get curtain() {
       return { phase: curtain.phase, open: curtain.openProgress, dim: curtain.dimProgress };
     },

@@ -25,6 +25,7 @@ import {
   createFrame,
   renderCode,
   formatHash,
+  styleAt,
 } from '../src/codec.mjs';
 
 // ── 아주 작은 PNG 디코더 (검사용) ────────────────────────────────────────
@@ -123,13 +124,16 @@ test('전시물 PNG 가 코덱의 픽셀과 같다', () => {
   assert.equal(decoded.width, CARD_SIZE);
   assert.equal(decoded.height, CARD_SIZE);
 
-  // 코덱을 따로 돌려 원본 픽셀을 얻는다
+  // 코덱을 따로 돌려 원본 픽셀을 얻는다.
+  // 전시실을 반드시 같이 적용해야 한다. 이 좌표가 어느 방에 있는지가
+  // 그림을 정하므로, 방을 빼먹으면 카드가 방문자가 보는 것과 달라진다.
   const spec = tierSpec(state.tier);
   const frame = createFrame(spec);
   renderCode(
     spec,
     coordinatesToCode(state.x, state.y, localityMix(state.locality, spec.axisBits), spec.axisBits),
     frame,
+    styleAt(state.x, state.y),
   );
 
   const scale = CARD_SIZE / CANVAS;

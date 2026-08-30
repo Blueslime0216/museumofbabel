@@ -20,6 +20,7 @@ import {
   renderCode,
   toBase36,
   fromBase36,
+  styleAt,
 } from './codec.mjs';
 
 /** 구역이 32px 이다. 층 4 는 덩어리로 보이고 층 16 은 노이즈로 흩어진다. */
@@ -102,7 +103,8 @@ export function inkFor(relativeLuminance) {
 
 function renderAt(x, y) {
   if (!frame) frame = createFrame(spec);
-  renderCode(spec, coordinatesToCode(x, y, mix, spec.axisBits), frame);
+  // 전시실을 적용한다. 표면 무늬도 실제 그 좌표의 그림이어야 한다.
+  renderCode(spec, coordinatesToCode(x, y, mix, spec.axisBits), frame, styleAt(x, y));
   return frame.rgba;
 }
 

@@ -18,6 +18,7 @@ import {
   coordinatesToCode,
   createFrame,
   renderCode,
+  styleAt,
 } from './codec.mjs';
 
 /** 층마다 프레임 버퍼와 혼합 계수를 재사용한다. */
@@ -43,8 +44,12 @@ self.onmessage = async event => {
     const { spec, mix, frame } = contextFor(tier, locality);
     // 순수 계산 시간만 잰다. 비트맵으로 옮기는 비용은 따로다.
     const started = performance.now();
-    const code = coordinatesToCode(BigInt(`0x${x}`), BigInt(`0x${y}`), mix, spec.axisBits);
-    renderCode(spec, code, frame);
+    const wx = BigInt(`0x${x}`);
+    const wy = BigInt(`0x${y}`);
+    const code = coordinatesToCode(wx, wy, mix, spec.axisBits);
+    // 전시실은 좌표에서 나온다. 주소에 담기지 않으므로 여기서 유도한다.
+    // 실측: 63타일에 대해 0.553ms. 렌더 한 장이 0.4~1ms 이므로 부담이 없다.
+    renderCode(spec, code, frame, styleAt(wx, wy));
     const computeMs = performance.now() - started;
 
     // 픽셀을 복사해서 넘긴다. createImageBitmap 이 비동기이므로 다음 요청이

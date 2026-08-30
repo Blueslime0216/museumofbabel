@@ -16,6 +16,7 @@ import {
   renderCode,
   parseHash,
   formatHash,
+  styleAt,
 } from '../../src/codec.mjs';
 import { stampAddress } from '../../src/png.mjs';
 import { encodePng } from './png-encode.mjs';
@@ -63,6 +64,9 @@ export function renderArtworkPng(state, size = CARD_SIZE) {
     spec,
     coordinatesToCode(state.x, state.y, localityMix(state.locality, spec.axisBits), spec.axisBits),
     frame,
+    // 전시실을 반드시 적용한다. 이 PNG 는 링크 카드에 뜨는 그림이므로
+    // 방문자가 그 주소에서 보는 것과 달라지면 카드가 거짓말을 한다.
+    styleAt(state.x, state.y),
   );
 
   // RGBA → RGB, 그리고 정수배 최근접 확대를 한 번에 한다.
