@@ -26,7 +26,30 @@ import {
   renderCode,
   formatHash,
   styleAt,
+  toBase62,
+  fromBase36,
+  axisBitsFor,
+  ADDRESSABLE_TIERS,
+  LOBBY_TIER,
+  VERSION_MARKER,
 } from '../src/codec.mjs';
+
+// ── 시험용 주소 ──────────────────────────────────────────────────────────
+//
+// 주소를 글자로 적어 두지 않는다. 형식이 바뀌면 검사가 통째로 썩기 때문이다.
+// v2 → v3 로 바꿀 때 실제로 다섯 개가 한꺼번에 깨졌다. 상태에서 만들어 쓴다.
+
+/** 층 하나의 시험용 주소. 좌표는 아무 값이나 고정으로 쓴다. */
+function addressOf(tier) {
+  return formatHash({
+    tier,
+    locality: 4,
+    x: fromBase36('abc'),
+    y: fromBase36('def'),
+  }).slice(1);
+}
+
+const SAMPLE = addressOf(8);
 
 // ── 아주 작은 PNG 디코더 (검사용) ────────────────────────────────────────
 
@@ -116,7 +139,7 @@ test('픽셀 수가 안 맞으면 던진다', () => {
 });
 
 test('전시물 PNG 가 코덱의 픽셀과 같다', () => {
-  const state = readAddress('v2.8.4.abc.def');
+  const state = readAddress(SAMPLE);
   assert.ok(state, '주소를 읽었다');
 
   const png = renderArtworkPng(state, CARD_SIZE);
@@ -160,7 +183,7 @@ test('전시물 PNG 가 코덱의 픽셀과 같다', () => {
 
 test('Up 필터가 파일을 실제로 줄인다', () => {
   // 우리 그림은 구역이 납작해서 같은 행이 이어진다. 필터가 그것을 0 으로 만든다.
-  const state = readAddress('v2.8.4.abc.def');
+  const state = readAddress(SAMPLE);
   const png = renderArtworkPng(state, CARD_SIZE);
   const rawSize = CARD_SIZE * CARD_SIZE * 3;
   assert.ok(
@@ -172,7 +195,7 @@ test('Up 필터가 파일을 실제로 줄인다', () => {
 // ── 3 — 도장 ─────────────────────────────────────────────────────────────
 
 test('PNG 에 주소가 적혀 있다', () => {
-  const state = readAddress('#v2.4.4.abc.def');
+  const state = readAddress(addressOf(4));
   const png = renderArtworkPng(state, 512);
   assert.equal(readStamp(png), formatHash(state));
 });
@@ -180,36 +203,64 @@ test('PNG 에 주소가 적혀 있다', () => {
 // ── 4 — 주소 읽기 ────────────────────────────────────────────────────────
 
 test('주소는 # 이 있어도 없어도 읽힌다', () => {
-  const withHash = readAddress('#v2.8.4.abc.def');
-  const without = readAddress('v2.8.4.abc.def');
+  const withHash = readAddress(`#${SAMPLE}`);
+  const without = readAddress(SAMPLE);
   assert.deepEqual(withHash, without);
-  assert.equal(addressText(withHash), 'v2.8.4.abc.def');
+  assert.equal(addressText(withHash), SAMPLE);
 });
 
 test('이상한 주소는 null 이다', () => {
+  // 층 4 의 축을 넘는 좌표를 담은 주소. 형식은 맞고 값이 밖이다.
+  const tier4Axis = axisBitsFor(4);
+  const outside = (() => {
+    const size = 1n << BigInt(tier4Axis);
+    const tierIndex = ADDRESSABLE_TIERS.indexOf(4);
+    const body = size << BigInt(tier4Axis); // x = size (한 칸 초과)
+    return `${VERSION_MARKER}${toBase62((body << 6n) | BigInt((4 << 3) | tierIndex))}`;
+  })();
+
   for (const bad of [
     '',
     '   ',
     null,
     undefined,
     'hello',
-    'v9.8.4.abc.def', // 버전이 다르다
-    'v1.8.4.abc.def', // 낡은 버전. v2에서 렌더 의미가 바뀌었으므로 받아 주면 안 된다
-    'v2.7.4.abc.def', // 없는 층
-    'v2.8.99.abc.def', // 없는 국소성 단계
-    'v2.8.4.ABC.def', // 대문자
-    'v2.8.4.abc', // 축이 하나
-    `v2.4.4.${'z'.repeat(200)}.def`, // 층 4 의 축을 넘는 값
-    `v2.8.4.${'z'.repeat(5000)}.def`, // 너무 길다
+    'v1.8.4.abc.def', // 옛 판. 판 표식에서 걸린다
+    'v2.8.4.abc.def', // 옛 판
+    'B123', // v2 표식
+    'D123', // 아직 없는 판
+    `${VERSION_MARKER}abc!def`, // 62진수가 아닌 글자
+    `${VERSION_MARKER}`, // 몸통이 없다
+    outside, // 층 4 의 축을 넘는 값
+    `${VERSION_MARKER}${'z'.repeat(9000)}`, // 너무 길다
   ]) {
     assert.equal(readAddress(bad), null, `"${String(bad).slice(0, 24)}" 는 null`);
   }
 });
 
+test('로비 주소는 그림이 없으므로 거부된다', () => {
+  // 형식으로는 유효하지만 이 함수의 약속은 "그릴 수 있는 작품 하나" 다.
+  const lobby = formatHash({ tier: LOBBY_TIER, locality: 4, x: 3n, y: 7n }).slice(1);
+  assert.equal(readAddress(lobby), null);
+});
+
 test('층마다 다 읽힌다', () => {
-  for (const tier of [4, 8, 16]) {
-    const state = readAddress(`v2.${tier}.4.abc.def`);
+  for (const tier of [4, 8, 16, 32]) {
+    const state = readAddress(addressOf(tier));
     assert.ok(state, `층 ${tier}`);
     assert.equal(state.tier, tier);
   }
+});
+
+test('가장 깊은 층의 가장 긴 주소도 길이 제한에 걸리지 않는다', () => {
+  // 손으로 적어 둔 4000자 제한이 층 32 의 최대 주소(4,306자)보다 짧아서 카드와
+  // 그림이 조용히 400 을 돌려주던 결함이 있었다. 제한을 명세에서 끌어내도록 고쳤다.
+  //
+  // 좌표를 최대로 둬야 최대 길이가 나온다. x 가 높은 자리에 있으므로 x 가 작으면
+  // 주소도 짧아진다 (같은 층에서도 길이가 다르다).
+  const size = 1n << BigInt(axisBitsFor(32));
+  const longest = formatHash({ tier: 32, locality: 4, x: size - 1n, y: size - 1n }).slice(1);
+
+  assert.ok(longest.length > 4000, `층 32 의 최대 주소가 ${longest.length} 자다`);
+  assert.ok(readAddress(longest), '가장 깊은 층의 주소를 거부했다');
 });

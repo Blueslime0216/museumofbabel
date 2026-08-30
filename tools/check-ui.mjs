@@ -18,6 +18,27 @@ import { chromium } from 'playwright-core';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { formatHash, parseHash, fromBase36, VERSION_MARKER } from '../src/codec.mjs';
+
+/**
+ * 시험용 주소를 상태에서 만든다.
+ *
+ * 글자로 적어 두면 형식이 바뀔 때 검사가 통째로 썩는다. v2 → v3 에서 실제로
+ * 그랬다. 주소의 모양을 단정하는 검사는 판 표식과 진법까지만 본다.
+ */
+const addressOf = (tier, locality = 4) =>
+  formatHash({ tier, locality, x: fromBase36('abc'), y: fromBase36('def') }).slice(1);
+
+/** URL 의 `?a=` 를 꺼내 상태로 읽는다. 층이 비트에 접혀 있으므로 정규식으로는 못 본다. */
+function stateInUrl(url) {
+  const found = /[?&]a=([^&#\s]+)/.exec(url);
+  if (!found) return null;
+  try {
+    return parseHash(`#${decodeURIComponent(found[1])}`);
+  } catch {
+    return null;
+  }
+}
 
 const target = process.argv[2] ?? 'http://127.0.0.1:4173/';
 const shots = process.argv.includes('--shots');
@@ -56,7 +77,7 @@ const settled = page =>
   page.waitForFunction(() => window.__museum.curtain.open >= 0.999, null, { timeout: 25000 });
 
 /**
- * 주소창에 적힌 주소. 표준형은 `?a=v2.8.4.…` 이다 (hash.mjs 참조).
+ * 주소창에 적힌 주소. 표준형은 `?a=C…` 이다 (hash.mjs 참조).
  *
  * `#` 을 뗀 형태로 돌려준다. 시트가 보여 주는 주소와 견주기 쉽게.
  */
@@ -678,7 +699,12 @@ for (const size of ['mobile', 'desktop']) {
       address: location.search,
     }));
     check('로비로 갈 수 있다', inLobby.tier === 0, `tier ${inLobby.tier}`);
-    check('로비 주소가 0층이다', /[?&]a=v2\.0\./.test(inLobby.address), inLobby.address.slice(0, 24));
+    // 층이 비트에 접혀 있으므로 주소를 실제로 읽어서 확인한다
+    check(
+      '로비 주소가 0층이다',
+      stateInUrl(inLobby.address)?.tier === 0,
+      inLobby.address.slice(0, 32),
+    );
 
     // 작품 정보를 열 수 없다. 로비에는 작품이 없다.
     await page.click('#stage', { position: { x: 200, y: 200 } });
@@ -731,7 +757,7 @@ for (const size of ['mobile', 'desktop']) {
   await page.click('#btn-search');
   await page.waitForTimeout(200);
   await page.click('#search-floor-row .segment[data-tier="16"]');
-  await page.fill('#search-text', '#v2.4.4.abc.def');
+  await page.fill('#search-text', `#${addressOf(4)}`);
   await page.click('#btn-go');
   await traveled(page);
   check(
@@ -981,7 +1007,17 @@ for (const size of ['mobile', 'desktop']) {
   await page.waitForTimeout(300);
 
   const url = await page.evaluate(() => location.href);
-  check('주소창이 ?a= 형태다', /\?a=v2\.\d+\.\d+\./.test(url), url.slice(0, 60));
+  check(
+    '주소창이 ?a= 형태다',
+    new RegExp(`\\?a=${VERSION_MARKER}[0-9A-Za-z]+$`).test(url),
+    url.slice(0, 60),
+  );
+  // 읽히는 구조가 남지 않았는가. 점으로 나뉜 칸도, 판 이름도 없어야 한다.
+  // (`v` 는 62진수의 한 자리이므로 주소 안에 나오는 것 자체는 정상이다.
+  //  금지할 것은 맨 앞의 `v2.` 같은 접두사뿐이다.)
+  const body = /[?&]a=([^&#]*)/.exec(url)?.[1] ?? '';
+  check('주소에 점으로 나뉜 칸이 없다', !body.includes('.'), body.slice(0, 40));
+  check('주소가 판 이름으로 시작하지 않는다', !/^v\d/.test(body), body.slice(0, 40));
   check('주소창에 해시가 없다', !url.includes('#'), url.slice(-40));
 
   // 복사 버튼이 주는 것이 바로 그 형태여야 한다

@@ -17,6 +17,7 @@ import {
   DEFAULT_LOCALITY,
   fromBase36,
   parseHash,
+  VERSION_MARKER,
   axisBitsFor,
 } from '../codec.mjs';
 import { readAddress } from '../png.mjs';
@@ -37,9 +38,9 @@ export function parseDestination(text, { tier = DEFAULT_TIER } = {}) {
   const trimmed = String(text ?? '').trim();
   if (!trimmed) return null;
 
-  // 전체 URL 이면 주소만 떼어 낸다. 두 형태를 다 받는다.
-  //   지금 형태  https://…/?a=v2.8.4.…
-  //   옛 형태    https://…/#v2.8.4.…
+  // 전체 URL 이면 주소만 떼어 낸다. 두 자리를 다 받는다.
+  //   표준형    https://…/?a=C1a2b3…
+  //   `#` 자리  https://…/#C1a2b3…
   const query = /[?&]a=([^&#\s]+)/.exec(trimmed);
   if (query) {
     try {
@@ -52,9 +53,12 @@ export function parseDestination(text, { tier = DEFAULT_TIER } = {}) {
   const hashAt = trimmed.indexOf('#');
   const candidate = hashAt >= 0 ? trimmed.slice(hashAt) : trimmed;
 
-  // #v2.… 또는 v2.…
+  // `#C1a2b3…` 또는 `C1a2b3…`
+  //
+  // 판 표식으로 가른다. 아래의 "36진수 좌표 두 개" 갈래와 겹치지 않아야 하는데,
+  // 그쪽은 반드시 값이 두 개이고 이쪽은 한 덩어리라서 겹치지 않는다.
   const withHash = candidate.startsWith('#') ? candidate : `#${candidate}`;
-  if (/^#v\d+\./.test(withHash)) {
+  if (withHash.startsWith(`#${VERSION_MARKER}`)) {
     try {
       return parseHash(withHash, axisBitsFor);
     } catch {
@@ -64,6 +68,9 @@ export function parseDestination(text, { tier = DEFAULT_TIER } = {}) {
 
   // 36진수 좌표 두 개. 쉼표나 공백으로 나뉜다.
   // 이때는 층 정보가 없으므로 고른 층을 쓴다.
+  //
+  // 여기만 62진수가 아니라 **36진수**다. 딸림표가 x · y 를 36진수로 보여 주므로
+  // 눈으로 옮겨 적는 값이 36진수다. 그래서 대소문자를 가리지 않아도 된다.
   const pair = trimmed.split(/[\s,]+/).filter(Boolean);
   if (pair.length === 2 && pair.every(part => /^[0-9a-z]+$/i.test(part))) {
     try {

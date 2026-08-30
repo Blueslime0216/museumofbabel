@@ -8,7 +8,7 @@ always yields the same artwork, every address is valid, and the pixels are
 computed in your browser.
 
 ```text
-?a=v2.8.4.<x>.<y>
+?a=C<base62>
    ↓  parse       address string → { floor, locality, x, y }
    ↓  codec       coordinate → codeword   (mixed radix, bijective)
    ↓  codec       codeword → fields       (quantizer, prediction mode, DCT basis, …)
@@ -21,10 +21,10 @@ computed in your browser.
 
 ```text
 floor 0    lobby. no artworks. a 64×64 grid that wraps, so walking returns you
-floor 1    4×4 zones of 64px      address ~91 chars
-floor 2    8×8 zones of 32px              ~323
-floor 3    16×16 zones of 16px            ~1,253
-floor 4    32×32 zones of 8px             ~4,966
+floor 1    4×4 zones of 64px      address up to 74 chars
+floor 2    8×8 zones of 32px                    275
+floor 3    16×16 zones of 16px                1,081
+floor 4    32×32 zones of 8px                 4,306
 ```
 
 Each floor is a separate address space, and deeper floors show fewer works at
@@ -53,6 +53,12 @@ itself, which also means you walk into a room rather than selecting one.
 - **Visitors are not logged.** Every pixel a person sees is computed
   client-side. The two serverless functions exist only to answer link-preview
   crawlers, and they contain no logging at all (enforced by a test).
+- **The address cannot be compressed.** Every bit pattern is a valid picture, so
+  the address space is used exactly to capacity and holds no redundancy — a
+  compressor would make it longer on average. The only lever is bits per
+  character, which is why the address is base62 and carries no readable prefix:
+  the floor and the locality level are folded into its lowest six bits, behind a
+  single leading character that marks the format version.
 
 ## Running it
 
@@ -66,10 +72,10 @@ npm run preview    # serve the build on :4173
 ### Checks
 
 ```powershell
-npm test           # 83 unit tests
+npm test           # 86 unit tests
 npm run check      # tests + function checks + codec hash verification
-npm run check-api  # 43 checks; calls the serverless handlers directly
-npm run check-ui   # 118 checks; needs `npm run preview` running first
+npm run check-api  # 45 checks; calls the serverless handlers directly
+npm run check-ui   # 120 checks; needs `npm run preview` running first
 ```
 
 `npm run check-ui` drives an already-installed Edge or Chrome through

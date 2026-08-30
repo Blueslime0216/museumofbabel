@@ -9,8 +9,11 @@
 // 크롤러는 자바스크립트를 돌리지 않으므로 **주소가 서버까지 가야 한다.**
 // 그래서 쿼리로 옮겼다. 길이는 두 자 늘어난다 (`#` → `?a=`).
 //
-// 옛 `#` 링크는 버리지 않는다. 들어오는 순간 읽어서 `?a=` 로 바꾼다.
-// 한 번만 일어나고 히스토리에 쌓이지 않는다.
+// `#` 자리에 적힌 주소도 읽어서 `?a=` 로 바꾼다. 한 번만 일어나고 히스토리에
+// 쌓이지 않는다.
+//
+// 주의: 이것은 **자리**가 다른 것을 받아 주는 것이지 옛 판을 받아 주는 것이 아니다.
+// v1 · v2 주소는 판 표식에서 거부된다. `#` 이든 `?a=` 든 마찬가지다.
 //
 // 표준형을 하나로 두는 이유. 둘을 같이 남기면 `/?a=X#X` 가 되어 주소가 두 배로
 // 길어진다. 실제로 그렇게 될 수 있었다.
@@ -37,8 +40,37 @@ export const PARAM = 'a';
 
 /** 상태 → 주소창에 넣을 문자열. `?a=…` 형태다. */
 export function queryFor(state) {
-  // 우리 주소는 `[0-9a-z.]` 와 `v2` 뿐이라 인코딩할 것이 없다. 그래도 규칙은 지킨다.
+  // 주소는 영숫자뿐이라(base62) 인코딩할 것이 없다. 그래도 규칙은 지킨다.
   return `?${PARAM}=${encodeURIComponent(formatHash(state).slice(1))}`;
+}
+
+/**
+ * 비교에 쓸 사본. 네 값만 가진다.
+ *
+ * 부르는 쪽이 살아 있는 state 객체를 그대로 넘기기도 한다. 참조를 들고 있으면
+ * 나중에 그 객체가 바뀌어도 "같다" 로 판정해서 주소창이 멈춘다.
+ */
+const snapshot = ({ tier, locality, x, y }) => ({ tier, locality, x, y });
+
+/**
+ * 두 상태가 같은 자리인가.
+ *
+ * **주소 문자열로 견주면 안 된다.** 층 32 의 주소를 만드는 데 1.7ms 가 든다
+ * (base62 는 2의 거듭제곱이 아니라 네이티브 변환이 없다). 이 함수는 끌기 중에도
+ * 중앙 칸이 바뀔 때마다 불리므로, 초당 30번이면 55ms 를 주소 만드는 데 쓰게 된다.
+ * 오래된 휴대폰이 목표 성능이라 그대로 두면 안 된다.
+ *
+ * BigInt 끼리의 비교는 워드 비교라 값싸다.
+ */
+function sameSpot(a, b) {
+  return (
+    a != null &&
+    b != null &&
+    a.tier === b.tier &&
+    a.locality === b.locality &&
+    a.x === b.x &&
+    a.y === b.y
+  );
 }
 
 /** 남에게 줄 전체 링크. 이것이 카드에 그림을 띄우는 형태다. */
@@ -52,7 +84,7 @@ function randomState(extra) {
 }
 
 /**
- * 주소창의 `#` 만 읽는다. 옛 링크를 붙였을 때를 위해 있다.
+ * 주소창의 `#` 만 읽는다. `#` 자리에 주소를 적어 붙였을 때를 위해 있다.
  *
  * 읽을 수 없거나 없으면 null. 이미 `?a=` 가 있어도 이쪽을 본다. 사람이 방금
  * 손으로 붙인 것이 이기는 것이 맞다.
@@ -96,49 +128,52 @@ export function readState() {
 
 export function createHashWriter() {
   let last = '';
+  let lastSpot = null;
   let lastAt = 0;
   let timer = 0;
   let queued = null;
 
-  function commit(query) {
-    last = query;
+  // 주소를 만드는 것은 여기 한 곳뿐이다. 그래서 최악의 경우에도 500ms 에 한 번이다.
+  function commit(spot) {
+    last = queryFor(spot);
+    lastSpot = spot;
     lastAt = performance.now();
     // 해시는 남기지 않는다. 옛 링크로 들어왔다면 이 호출이 그것을 지운다.
-    history.replaceState(null, '', `${location.pathname}${query}`);
+    history.replaceState(null, '', `${location.pathname}${last}`);
   }
 
   return {
     /**
      * 중앙 전시물이 바뀌었을 때만 부른다.
-     * paused 가 참이면 아무것도 하지 않는다 (제스처 중).
+     * paused 가 참이면 주소창에 쓰지 않고 담아만 둔다 (제스처 중).
      */
     set(state, { paused = false } = {}) {
-      const query = queryFor(state);
-      if (query === last) return;
+      if (sameSpot(state, lastSpot)) return;
+      const spot = snapshot(state);
       if (paused) {
-        queued = query;
+        queued = spot;
         return;
       }
 
       const since = performance.now() - lastAt;
       if (since >= MIN_GAP_MS) {
-        commit(query);
+        commit(spot);
         queued = null;
         return;
       }
 
-      queued = query;
+      queued = spot;
       if (timer) return;
       timer = setTimeout(() => {
         timer = 0;
-        if (queued && queued !== last) commit(queued);
+        if (queued && !sameSpot(queued, lastSpot)) commit(queued);
         queued = null;
       }, MIN_GAP_MS - since);
     },
 
     /** 제스처가 끝난 뒤 한 번 밀어 준다. */
     flush() {
-      if (queued && queued !== last) {
+      if (queued && !sameSpot(queued, lastSpot)) {
         commit(queued);
         queued = null;
       }
@@ -146,7 +181,7 @@ export function createHashWriter() {
 
     /** 옛 `#` 링크로 들어왔을 때 곧바로 표준형으로 바꾼다. */
     normalize(state) {
-      commit(queryFor(state));
+      commit(snapshot(state));
     },
 
     get current() {

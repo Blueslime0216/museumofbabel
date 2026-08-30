@@ -68,6 +68,11 @@ export { BASIS_SIZE, BASIS_COUNT } from './vendor/codec/basis.mjs';
 // ── URL 규격 ─────────────────────────────────────────────────────────────
 export {
   URL_VERSION,
+  // 주소 맨 앞의 판 표식. 주소인지 가리는 데 쓴다.
+  VERSION_MARKER,
+  // 주소 본문의 진법. 딸림표의 x · y 표시는 아직 36진수를 쓴다.
+  toBase62,
+  fromBase62,
   toBase36,
   fromBase36,
   formatHash,

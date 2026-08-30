@@ -6,7 +6,7 @@
 //
 // 이 대응을 한 곳에만 둔다. 층 모달과 찾기 모달이 같은 목록을 쓴다.
 
-import { TIERS, tierSpec, formatHash, LOBBY_TIER, isLobbyTier } from './codec.mjs';
+import { TIERS, tierSpec, LOBBY_TIER, isLobbyTier } from './codec.mjs';
 import { LOBBY_SPAN } from './lobby.mjs';
 import { MAX_VISIBLE, MIN_CELL } from './camera.mjs';
 import { t } from './i18n/index.mjs';
@@ -98,12 +98,6 @@ const LOBBY_FLOOR = {
   grid: `${LOBBY_SPAN} × ${LOBBY_SPAN}`,
   zones: 0,
   bytes: 0,
-  hashLength: formatHash({
-    tier: LOBBY_TIER,
-    locality: 4,
-    x: LOBBY_SPAN - 1n,
-    y: LOBBY_SPAN - 1n,
-  }).length,
 };
 
 /** 낮은 층부터. 로비가 0층, 작품 층은 1부터. */
@@ -120,13 +114,6 @@ export const FLOORS = [
         grid: `${tier} × ${tier}`,
         zones: spec.blockCount,
         bytes: spec.byteLength,
-        /** 이 층의 주소가 몇 자인가. 층을 고르는 데 실제로 쓰이는 정보다. */
-        hashLength: formatHash({
-          tier,
-          locality: 4,
-          x: (1n << BigInt(spec.axisBits)) - 1n,
-          y: (1n << BigInt(spec.axisBits)) - 1n,
-        }).length,
       };
     }),
 ];

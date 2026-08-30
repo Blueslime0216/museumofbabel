@@ -28,13 +28,25 @@ import { encodePng } from './png-encode.mjs';
 export const CARD_SIZE = 1024;
 
 /**
+ * 받아 줄 주소의 최대 길이. 명세에서 끌어낸다.
+ *
+ * 손으로 4000 을 적어 두었는데, 가장 깊은 층의 주소가 그보다 길었다. 그래서
+ * 층 32 의 링크는 카드도 그림도 400 을 받았다 — 조용한 결함이었다.
+ * 여기서는 실제 최대치에 여유를 조금 더해 쓴다.
+ *
+ *   축 비트 x 2 + 접은 헤더 6비트 → base62 자릿수 + 판 표식 1 + `#` 1
+ */
+const MAX_ADDRESS_CHARS =
+  Math.ceil((2 * Math.max(...TIERS.map(axisBitsFor)) + 6) / Math.log2(62)) + 16;
+
+/**
  * 주소 문자열을 읽는다. `#` 이 있어도 없어도 받는다.
  *
  * 읽을 수 없으면 null. 던지지 않는다. 부르는 쪽이 400 을 돌려준다.
  */
 export function readAddress(text) {
   const trimmed = String(text ?? '').trim();
-  if (!trimmed || trimmed.length > 4000) return null;
+  if (!trimmed || trimmed.length > MAX_ADDRESS_CHARS) return null;
   const at = trimmed.indexOf('#');
   const candidate = at >= 0 ? trimmed.slice(at) : `#${trimmed}`;
   try {

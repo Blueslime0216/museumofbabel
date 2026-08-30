@@ -20,6 +20,7 @@ import { readFileSync } from 'node:fs';
 
 import art from '../api/art.mjs';
 import card from '../api/card.mjs';
+import { formatHash, fromBase36, VERSION_MARKER } from '../src/codec.mjs';
 
 const results = [];
 let failed = 0;
@@ -54,7 +55,15 @@ function fakeResponse() {
   return self;
 }
 
-const request = (query, { method = 'GET', host = 'demo-museumofbabel.vercel.app' } = {}) => ({
+/**
+ * 요청에 실을 호스트.
+ *
+ * 함수는 이 값을 그대로 되울려 og:url 과 og:image 를 만든다. 코드에 도메인이
+ * 박혀 있지 않다는 뜻이고, 그래서 도메인을 바꿔도 카드가 따라온다.
+ */
+const HOST = 'museumofbabel.org';
+
+const request = (query, { method = 'GET', host = HOST } = {}) => ({
   method,
   query,
   headers: { host },
@@ -231,7 +240,9 @@ for (const level of ['log', 'info', 'warn', 'error', 'debug', 'trace']) {
 
 // ── 1 — 그림 ─────────────────────────────────────────────────────────────
 
-const ADDRESS = 'v2.8.4.abc.def';
+// 주소를 글자로 적어 두지 않는다. 형식이 바뀌면 검사가 통째로 썩는다.
+const ADDRESS = formatHash({ tier: 8, locality: 4, x: fromBase36('abc'), y: fromBase36('def') })
+  .slice(1);
 
 {
   const png = await call(art, { a: ADDRESS });
@@ -304,14 +315,14 @@ const ADDRESS = 'v2.8.4.abc.def';
   const image = /<meta property="og:image" content="([^"]+)"/.exec(html)?.[1];
   check(
     '카드: og:image 가 그림 함수를 가리킨다',
-    image === `https://demo-museumofbabel.vercel.app/api/art?a=${ADDRESS}`,
+    image === `https://${HOST}/api/art?a=${ADDRESS}`,
     image ?? '없다',
   );
+  const url = /<meta property="og:url" content="([^"]+)"/.exec(html)?.[1];
   check(
     '카드: og:url 이 사람이 갈 자리다',
-    /<meta property="og:url" content="https:\/\/demo-museumofbabel\.vercel\.app\/\?a=v2\.8\.4\.abc\.def"/.test(
-      html,
-    ),
+    url === `https://${HOST}/?a=${ADDRESS}`,
+    url ?? '없다',
   );
   check('카드: 큰 그림 카드로 요청한다', /twitter:card" content="summary_large_image"/.test(html));
   check(
@@ -323,7 +334,7 @@ const ADDRESS = 'v2.8.4.abc.def';
 
   // 주소에 따옴표를 섞어 넣으려 해도 태그가 깨지지 않는다.
   // (parseHash 가 먼저 막지만, 막는 곳이 하나뿐이면 언젠가 새어 나온다)
-  const nasty = await call(card, { a: 'v2.8.4.abc.def" onload="alert(1)' });
+  const nasty = await call(card, { a: `${ADDRESS}" onload="alert(1)` });
   check(
     '카드: 이상한 주소는 카드를 만들지 않는다',
     nasty.status === 302,
@@ -338,9 +349,11 @@ const ADDRESS = 'v2.8.4.abc.def';
     undefined,
     '',
     'hello',
-    'v1.8.4.abc.def', // 낡은 버전
-    'v2.7.4.abc.def',
-    'v2.8.4.ABC.def',
+    'v1.8.4.abc.def', // 옛 판. 판 표식에서 걸린다
+    'v2.8.4.abc.def', // 옛 판
+    'B4kZq9wT', // v2 표식
+    `${VERSION_MARKER}abc!def`, // 62진수가 아닌 글자
+    VERSION_MARKER, // 몸통이 없다
   ]) {
     const png = await call(art, { a: bad });
     check(`거절: 그림이 "${String(bad).slice(0, 16)}" 를 400 으로 막는다`, png.status === 400);
