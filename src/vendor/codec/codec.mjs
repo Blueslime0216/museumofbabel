@@ -304,11 +304,125 @@ export function writeBlock(
 // ── 렌더링 ───────────────────────────────────────────────────────────────
 
 /**
+ * 블록 하나의 필드를 25비트 정수로 되돌린다. 픽셀아트 방이 쓴다.
+ *
+ * 자리값은 BLOCK_FIELDS 의 순서를 그대로 따른다. buildDigitPlan 과 같은 규약이다.
+ */
+function packBlock(spec, fields, index) {
+  let value = 0;
+  let place = 1;
+  for (const field of spec.blockFields) {
+    value += fields[field.name][index] * place;
+    place *= field.radix;
+  }
+  return value;
+}
+
+/**
+ * 픽셀아트 방. 블록마다 평탄한 24비트 색.
+ *
+ * 블록을 평탄하게 만들면 mode(3) + amp(3) + basis(6) = 12비트가 죽는다.
+ * 그냥 무시하면 그만큼 주소가 중복된다. 그래서 25비트를 다시 쪼갠다.
+ *
+ *   R 8비트 · G 8비트 · B 8비트   (남는 1비트는 예비)
+ *
+ * ── 왜 YCbCr 을 거치지 않는가 ────────────────────────────────────────
+ *
+ * 처음에는 luma·cb·cr 8비트씩으로 쪼갰다. 그러자 `amp` 의 8가지 값이 색
+ * 3가지만 냈다. amp 가 cb 바이트의 하위 비트에 들어가는데 정수 변환이 그
+ * 작은 차이를 지웠기 때문이다.
+ *
+ * 원인은 더 근본적이다. YCbCr 입방체가 RGB 입방체보다 크므로 변환이 **단사가
+ * 아니다.** 여러 YCbCr 값이 같은 RGB 로 잘린다. 다른 방은 크로마가 4+4비트라
+ * 그 손실이 보이지 않았지만, 여기서는 8+8비트를 쓰므로 드러난다.
+ *
+ * 평탄한 블록에는 크로마 서브샘플링도, 밝기/색 분리도 쓸 데가 없다.
+ * 그래서 RGB 로 바로 쪼갠다. 그러면 24비트가 서로 다른 24비트 색에 정확히
+ * 대응하고 손실이 0이다.
+ *
+ * ── 1비트는 반드시 남는다 ────────────────────────────────────────────
+ *
+ * 평탄한 8비트 RGB 블록이 가질 수 있는 모습은 **정확히 2^24 가지**다.
+ * 블록 예산이 25비트이므로 한 비트는 어디에 넣어도 보이지 않는다.
+ * 정보량의 천장이며 우회할 방법이 없다 — 블록이 평탄하기를 그만두어야 풀린다.
+ *
+ * 남는 비트는 자리값이 가장 높은 필드(mode)의 최상위 비트다. 그래서 이 방에서는
+ * 그림 하나에 주소가 두 개 붙는다. v1 의 낭비(12비트 = 주소 4,096개)에 비하면
+ * 작지만, 0 은 아니다. test/rooms.test.mjs 가 이 사실을 고정한다.
+ *
+ * ── 투영 ─────────────────────────────────────────────────────────────
+ *
+ * 이 방은 투영이 탐색 없이 정확하다. 블록 평균 RGB 를 그대로 담으면 끝이다.
+ * 모드 고르기도, 기저 64개 훑기도, quant 후보 시험도 없다.
+ */
+function renderPixelArt(spec, fields, frame) {
+  const { rgba } = frame;
+  const G = spec.tier;
+  const B = spec.blockPx;
+
+  for (let by = 0; by < G; by++) {
+    for (let bx = 0; bx < G; bx++) {
+      const packed = packBlock(spec, fields, by * G + bx);
+      const r = packed & 0xff;
+      const g = (packed >>> 8) & 0xff;
+      const b = (packed >>> 16) & 0xff;
+
+      for (let y = 0; y < B; y++) {
+        const row = (by * B + y) * CANVAS + bx * B;
+        for (let x = 0; x < B; x++) {
+          const o = (row + x) * 4;
+          rgba[o] = r;
+          rgba[o + 1] = g;
+          rgba[o + 2] = b;
+          rgba[o + 3] = 255;
+        }
+      }
+    }
+  }
+  return frame;
+}
+
+/**
+ * 역방향 주사용 참조. 아래 행과 오른쪽 열을 본다.
+ *
+ * 폐루프의 방향을 뒤집는 것이므로, 번짐이 좌상 방향으로 흐른다.
+ * gatherReferences 와 대칭이며 같은 버퍼를 쓴다.
+ */
+function gatherReferencesReversed(luma, px0, py0, B, base, top, topRight, left) {
+  const below = py0 + B;
+  const right = px0 + B;
+
+  if (below >= CANVAS) {
+    top.fill(base);
+    topRight.fill(base);
+  } else {
+    const row = below * CANVAS;
+    for (let i = 0; i < B; i++) top[i] = luma[row + px0 + i];
+    for (let i = 0; i < B; i++) {
+      const sx = px0 - 1 - i;
+      topRight[i] = luma[row + (sx < 0 ? 0 : sx)];
+    }
+  }
+
+  if (right >= CANVAS) left.fill(base);
+  else for (let i = 0; i < B; i++) left[i] = luma[(py0 + i) * CANVAS + right];
+
+  if (below >= CANVAS || right >= CANVAS) return base;
+  return luma[below * CANVAS + right];
+}
+
+/**
  * 필드를 256x256 RGBA로 렌더한다.
  *
  * 예외를 던지지 않는다. 어떤 필드 조합이라도 그림이 나온다.
+ *
+ * `style` 은 전시실이다(rooms.mjs). 주지 않으면 기준 전시실로 그린다.
+ * 스타일은 **같은 주소를 다르게 읽는 것**이므로 주소 길이에 영향이 없다.
+ * 삼각함수가 필요한 변환은 rooms.mjs 가 표로 미리 계산해 둔다. 이 루프에는 없다.
  */
-export function renderFields(spec, fields, frame) {
+export function renderFields(spec, fields, frame, style = null) {
+  if (style?.pixelArt) return renderPixelArt(spec, fields, frame);
+
   const { luma, chromaB, chromaR, rgba, pred, top, topRight, left } = frame;
   const G = spec.tier;
   const B = spec.blockPx;
@@ -329,46 +443,113 @@ export function renderFields(spec, fields, frame) {
   // reserved는 기저 혼합(하위 2비트)과 크로마 어긋남(상위 2비트)으로 나뉜다.
   const { basisBlend, chromaShift } = decodeReserved(header.reserved);
 
-  // 1. 루마 평면 — 래스터 순서로 폐루프 재구성
-  for (let by = 0; by < G; by++) {
+  // 전시실이 정하는 것들. 루프 밖에서 한 번만 꺼낸다.
+  const modeSet = style?.modeSet ?? null;
+  const modeCount = modeSet ? modeSet.length : 0;
+  const openLoop = style?.openLoop === true;
+  const reverseScan = style?.reverseScan === true;
+  const negative = style?.negative === true;
+  const gather = reverseScan ? gatherReferencesReversed : gatherReferences;
+
+  // 1. 루마 평면 — 폐루프 재구성
+  for (let step = 0; step < spec.blockCount; step++) {
+    // 역방향이면 우하단부터. 참조도 아래·오른쪽으로 바뀐다.
+    const order = reverseScan ? spec.blockCount - 1 - step : step;
+    const by = (order / G) | 0;
+    const bx = order - by * G;
+    const bi = by * G + bx;
     const py0 = by * B;
-    for (let bx = 0; bx < G; bx++) {
-      const bi = by * G + bx;
-      const px0 = bx * B;
+    const px0 = bx * B;
 
-      const topLeft = gatherReferences(luma, px0, py0, B, base, top, topRight, left);
-      predictBlock(fields.mode[bi], B, logB, top, topRight, left, topLeft, pred);
-
-      writeBlock(
-        luma,
-        px0,
-        py0,
-        B,
-        logScale,
-        pred,
-        (fields.dc[bi] - DC_BIAS) * dcStep,
-        AMP_MULT[fields.amp[bi]] * acStep,
-        fields.basis[bi],
-        basisBlend,
-      );
+    let topLeft;
+    if (openLoop) {
+      // 이웃을 보지 않는다. 블록이 서로 독립해서 딱딱한 모자이크가 된다.
+      //
+      // 주의: 모든 참조가 base(상수)이므로 어떤 예측기든 평탄한 값을 낸다.
+      // 즉 이 방에서는 mode 필드 3비트가 죽는다. amp=0 이 basis 를 죽였던 것과
+      // 같은 종류의 낭비이며 아직 해결하지 않았다. _dev 의 명세 5절 참조.
+      top.fill(base);
+      topRight.fill(base);
+      left.fill(base);
+      topLeft = base;
+    } else {
+      topLeft = gather(luma, px0, py0, B, base, top, topRight, left);
     }
+
+    const rawMode = fields.mode[bi];
+    const mode = modeSet ? modeSet[rawMode % modeCount] : rawMode;
+    predictBlock(mode, B, logB, top, topRight, left, topLeft, pred);
+
+    writeBlock(
+      luma,
+      px0,
+      py0,
+      B,
+      logScale,
+      pred,
+      (fields.dc[bi] - DC_BIAS) * dcStep,
+      AMP_MULT[fields.amp[bi]] * acStep,
+      fields.basis[bi],
+      basisBlend,
+    );
+  }
+
+  if (negative) {
+    for (let i = 0; i < luma.length; i++) luma[i] = 255 - luma[i];
   }
 
   // 2. 크로마 평면 — 블록 단위 평탄 채움
   const baseCb = expand4(header.baseCb);
   const baseCr = expand4(header.baseCr);
   const CB = spec.chromaBlockPx;
+
+  // 크로마 해상도. undefined 면 블록마다, 0 이면 전역만, n 이면 n x n 구역이 공유.
+  const zones = style?.chroma;
+  const zoneSpan = zones > 0 ? G / zones : 0;
+  const hueLookup = style?.hueLookup ?? null;
+  const satScale = style?.satScale ?? 256;
+
   for (let by = 0; by < G; by++) {
     const cy0 = by * CB;
     for (let bx = 0; bx < G; bx++) {
       const bi = by * G + bx;
       const cx0 = bx * CB;
 
-      let vb = baseCb + (fields.cb[bi] - CHROMA_BIAS) * chromaStep;
+      // 어느 블록의 크로마 값을 쓸 것인가
+      let source = bi;
+      if (zones === 0) source = -1;
+      else if (zones > 0) {
+        const zy = ((by / zoneSpan) | 0) * zoneSpan;
+        const zx = ((bx / zoneSpan) | 0) * zoneSpan;
+        source = zy * G + zx;
+      }
+
+      let ci = CHROMA_BIAS;
+      let cj = CHROMA_BIAS;
+      if (source >= 0) {
+        ci = fields.cb[source];
+        cj = fields.cr[source];
+      }
+
+      let vb;
+      let vr;
+      if (hueLookup) {
+        // 색상을 좁은 띠로 모은다. 방이 하나의 색으로 기억되게 하는 손잡이다.
+        const at = (ci * 16 + cj) * 2;
+        vb = baseCb + hueLookup[at] * chromaStep;
+        vr = baseCr + hueLookup[at + 1] * chromaStep;
+      } else {
+        vb = baseCb + (ci - CHROMA_BIAS) * chromaStep;
+        vr = baseCr + (cj - CHROMA_BIAS) * chromaStep;
+      }
+
+      if (satScale !== 256) {
+        vb = 128 + (((vb - 128) * satScale) >> 8);
+        vr = 128 + (((vr - 128) * satScale) >> 8);
+      }
+
       if (vb < 0) vb = 0;
       else if (vb > 255) vb = 255;
-
-      let vr = baseCr + (fields.cr[bi] - CHROMA_BIAS) * chromaStep;
       if (vr < 0) vr = 0;
       else if (vr > 255) vr = 255;
 
@@ -390,6 +571,8 @@ export function renderFields(spec, fields, frame) {
   const halfChromaBlock = CB >> 1;
   const shiftX = chromaShift & 1 ? halfChromaBlock : 0;
   const shiftY = chromaShift & 2 ? halfChromaBlock : 0;
+  // 이색 인쇄: 크로마를 블록 필드가 아니라 루마에서 만든다. 표는 미리 계산돼 있다.
+  const duotone = style?.duotoneLookup ?? null;
 
   let o = 0;
   for (let y = 0; y < CANVAS; y++) {
@@ -397,9 +580,17 @@ export function renderFields(spec, fields, frame) {
     const lumaRow = y * CANVAS;
     for (let x = 0; x < CANVAS; x++) {
       const Y = luma[lumaRow + x];
-      const cx = ((x >> 1) + shiftX) & shiftMask;
-      const cb = chromaB[chromaRow + cx] - 128;
-      const cr = chromaR[chromaRow + cx] - 128;
+      let cb;
+      let cr;
+      if (duotone) {
+        const at = Y * 2;
+        cb = duotone[at];
+        cr = duotone[at + 1];
+      } else {
+        const cx = ((x >> 1) + shiftX) & shiftMask;
+        cb = chromaB[chromaRow + cx] - 128;
+        cr = chromaR[chromaRow + cx] - 128;
+      }
       // Uint8ClampedArray가 0..255로 자동 클램프한다.
       rgba[o] = Y + ((91881 * cr) >> 16);
       rgba[o + 1] = Y - ((22554 * cb + 46802 * cr) >> 16);
@@ -416,14 +607,16 @@ export function renderFields(spec, fields, frame) {
  * 코드워드 하나를 256x256 RGBA로 만든다.
  *
  * 이 프로젝트의 핵심 한 줄. 검색도, 시행착오도, 실패도 없다.
+ *
+ * `style` 을 주면 그 전시실로 읽는다. 주지 않으면 기준 전시실이다.
  */
-export function renderCode(spec, code, frame) {
+export function renderCode(spec, code, frame, style = null) {
   const target = frame ?? createFrame(spec);
   decodeFields(spec, code, target.fields);
-  return renderFields(spec, target.fields, target);
+  return renderFields(spec, target.fields, target, style);
 }
 
 /** 편의 함수. 티어 번호로 바로 렌더한다. */
-export function renderTierCode(tier, code, frame) {
-  return renderCode(tierSpec(tier), code, frame);
+export function renderTierCode(tier, code, frame, style = null) {
+  return renderCode(tierSpec(tier), code, frame, style);
 }
