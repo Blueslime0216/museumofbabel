@@ -539,7 +539,7 @@ for (const size of ['mobile', 'desktop']) {
       current: button.getAttribute('aria-current') === 'true',
     })),
   );
-  check('층이 낮은 것부터 세 개다', floors.map(f => f.tier).join(',') === '4,8,16');
+  check('층이 낮은 것부터 오름차순이다', floors.map(f => f.tier).join(',') === '4,8,16,32');
   check('층마다 이름과 격자 크기가 있다', floors.every(f => /\d+\s*×\s*\d+/.test(f.text)), floors[0]?.text);
   check('지금 층이 표시된다', floors.filter(f => f.current).length === 1);
 
@@ -575,7 +575,7 @@ for (const size of ['mobile', 'desktop']) {
   const segments = await page.evaluate(() =>
     [...document.querySelectorAll('#search-floor-row .segment')].map(b => Number(b.dataset.tier)),
   );
-  check('찾기에도 층 선택이 있다', segments.join(',') === '4,8,16');
+  check('찾기에도 층 선택이 있다', segments.join(',') === '4,8,16,32');
 
   await page.click('#search-floor-row .segment[data-tier="16"]');
   await page.fill('#search-text', 'abc,def');
