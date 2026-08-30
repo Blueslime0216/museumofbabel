@@ -12,6 +12,7 @@
 
 import { tierSpec, coordinatesToCode, localityMix, randomCoordinate } from './codec.mjs';
 import { createCamera, MIN_CELL } from './camera.mjs';
+import { zoomBudgetFor, isDeepestFloor } from './floors.mjs';
 import { createCurtainState, attachCurtain, PHASE } from './curtain.mjs';
 import { createTiles } from './tiles.mjs';
 import { createStage } from './stage.mjs';
@@ -63,7 +64,7 @@ const tiles = createTiles({
   },
 });
 
-const stage = createStage({ canvas, camera, tiles, reducedMotion });
+const stage = createStage({ canvas, camera, tiles, zoomBudgetFor, reducedMotion });
 const announcer = document.getElementById('announcer');
 
 const sheet = createSheet({
@@ -108,11 +109,22 @@ let lastCenter = null;
 
 // ── 화면 크기 ────────────────────────────────────────────────────────────
 
-/** 화면 크기에서 기본 줌을 정한다. 휴대폰에서 3열쯤 보인다. */
+/**
+ * 화면 크기에서 기본 줌을 정한다. 1층 휴대폰에서 3열쯤 보인다.
+ *
+ * 층마다 다르다. 깊은 층은 더 당겨서 시작한다. 그 층의 최소 줌이 이미 크므로
+ * 기본값도 같은 비율로 올려야 "입장하자마자 최소 줌에 붙어 있는" 상태를 피한다.
+ * 배수는 floors.mjs 가 정하고 그 근거도 거기에 적어 두었다.
+ *
+ * 마지막으로 카메라의 한계로 자른다. 층별 최소 줌이 이 값보다 클 수 있다.
+ */
 function computeRestZoom() {
   const { width, height } = stage.view;
   const shorter = Math.max(1, Math.min(width, height));
-  return Math.max(MIN_CELL + 40, Math.min(164, shorter / 3.1));
+  const base = Math.max(MIN_CELL + 40, Math.min(164, shorter / 3.1));
+  const { restScale } = zoomBudgetFor(state.tier);
+  const { min, max } = camera.zoomBounds;
+  return Math.min(Math.max(base * restScale, min), max);
 }
 
 function resize() {
@@ -136,6 +148,12 @@ function applyWorld() {
     baseY: state.y,
     axisBits: spec.axisBits,
   });
+  // setWorld 가 그 층의 줌 한계를 카메라에 적용했다. 기본 줌은 그 한계에
+  // 의존하므로 여기서 다시 계산해야 한다. 그러지 않으면 층을 옮긴 직후
+  // 이전 층의 기본 줌으로 개방한다.
+  restZoom = computeRestZoom();
+  // 가장 깊은 층에만 아주 약한 비네트를 얹는다. 값은 stage.css 가 쓴다.
+  document.body.style.setProperty('--depth', isDeepestFloor(state.tier) ? '1' : '0');
   camera.snapTo({ x: 0, y: 0 });
   lastCenter = null;
 }
@@ -413,7 +431,14 @@ Object.assign(window, {
       return { ...state, x: String(state.x), y: String(state.y) };
     },
     get camera() {
-      return { x: camera.x, y: camera.y, zoom: camera.zoom, target: camera.target };
+      return {
+        x: camera.x,
+        y: camera.y,
+        zoom: camera.zoom,
+        target: camera.target,
+        // 층별 줌 한계. 화면 검사가 층마다 달라지는 것을 본다.
+        bounds: camera.zoomBounds,
+      };
     },
     get tiles() {
       return tiles.stats;

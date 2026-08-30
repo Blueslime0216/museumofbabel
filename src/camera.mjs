@@ -77,14 +77,23 @@ export function createCamera({ x = 0, y = 0, zoom = 120 } = {}) {
      * 화면 크기가 정해지면 줌 한계가 정해진다.
      *
      * 최소 줌은 두 조건 중 큰 쪽이다.
-     *   손가락으로 누를 수 있는 크기 (MIN_CELL)
-     *   동시 표시 개수가 상한을 넘지 않는 크기
+     *   손가락으로 누를 수 있는 크기 (minCell)
+     *   동시 표시 개수가 상한을 넘지 않는 크기 (maxVisible)
      * 넓은 화면에서는 두 번째가 이긴다. 그래야 큰 화면에서 타일이 서로를 밀어내지 않는다.
+     *
+     * `budget` 은 층별 정책이며 floors.mjs 가 정한다. 카메라는 그것이 어디서
+     * 왔는지 모른다. 주지 않으면 층과 무관한 기본값을 쓴다.
+     * 깊은 층은 한 장을 그리는 데 더 오래 걸리므로 상한이 낮아지고,
+     * 그 결과 멀리 보지 못한다. 이유는 floors.mjs 에 적어 두었다.
      */
-    setViewport(width, height) {
+    setViewport(width, height, budget = null) {
+      const maxVisible = budget?.maxVisible ?? MAX_VISIBLE;
+      const minCell = budget?.minCell ?? MIN_CELL;
       const shorter = Math.max(1, Math.min(width, height));
-      const byBudget = Math.sqrt((width * height) / MAX_VISIBLE);
-      const min = Math.max(MIN_CELL, byBudget);
+      const byBudget = Math.sqrt((width * height) / maxVisible);
+      const min = Math.max(minCell, byBudget);
+      // 최대 줌은 층과 무관하게 고정이다. 한 점을 크게 보는 것은
+      // 렌더 부담을 늘리지 않으므로 제한할 이유가 없다.
       bounds = { min, max: Math.max(min + 1, shorter * MAX_CELL_RATIO) };
       now.zoom = clamp(now.zoom, bounds.min, bounds.max);
       goal.zoom = clamp(goal.zoom, bounds.min, bounds.max);

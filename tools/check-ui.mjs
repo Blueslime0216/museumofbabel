@@ -569,6 +569,50 @@ for (const size of ['mobile', 'desktop']) {
   check('무작위는 지금 층 안에서 옮긴다', afterRandom.tier === 4, `tier ${afterRandom.tier}`);
   check('무작위가 자리를 바꾼다', afterRandom.address !== afterFloor.address);
 
+  // ── 층별 줌 예산과 깊이 비네트 ──────────────────────────────────────
+  //
+  // 깊은 층은 한 장을 그리는 데 더 오래 걸린다. 그래서 멀리 보지 못하게 막는다.
+  // 그러지 않으면 끌 때 가장자리에 아직 그리지 못한 검은 칸이 보인다.
+  const perFloor = [];
+  for (const tier of [4, 8, 16, 32]) {
+    await page.click('#btn-floor');
+    await page.waitForTimeout(200);
+    await page.click(`#floor-list .lang[data-tier="${tier}"]`);
+    await traveled(page);
+    perFloor.push(
+      await page.evaluate(() => ({
+        tier: window.__museum.state.tier,
+        min: window.__museum.camera.bounds.min,
+        max: window.__museum.camera.bounds.max,
+        zoom: window.__museum.camera.zoom,
+        depth: getComputedStyle(document.body).getPropertyValue('--depth').trim(),
+      })),
+    );
+  }
+
+  check(
+    '층이 깊어질수록 최소 줌이 커진다',
+    perFloor.every((f, i) => i === 0 || f.min > perFloor[i - 1].min),
+    perFloor.map(f => `${f.tier}:${f.min.toFixed(0)}`).join(' '),
+  );
+  check(
+    '최대 줌은 층과 무관하게 같다',
+    perFloor.every(f => Math.abs(f.max - perFloor[0].max) < 0.5),
+    perFloor.map(f => `${f.tier}:${f.max.toFixed(0)}`).join(' '),
+  );
+  check(
+    '입장 줌이 층마다 다르고 그 층의 한계 안에 있다',
+    perFloor.every(f => f.zoom >= f.min - 0.5 && f.zoom <= f.max + 0.5) &&
+      perFloor[perFloor.length - 1].zoom > perFloor[0].zoom,
+    perFloor.map(f => `${f.tier}:${f.zoom.toFixed(0)}`).join(' '),
+  );
+  check(
+    '깊이 비네트는 가장 깊은 층에만 켜진다',
+    perFloor.slice(0, -1).every(f => f.depth === '0') &&
+      perFloor[perFloor.length - 1].depth === '1',
+    perFloor.map(f => `${f.tier}:${f.depth}`).join(' '),
+  );
+
   // 찾기의 층 선택
   await page.click('#btn-search');
   await page.waitForTimeout(250);

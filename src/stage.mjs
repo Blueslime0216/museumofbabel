@@ -66,7 +66,7 @@ function approach(current, target, dt, rate) {
   return current + (target - current) * (1 - Math.exp(-rate * dt));
 }
 
-export function createStage({ canvas, camera, tiles, wall = '#12100e', reducedMotion = false }) {
+export function createStage({ canvas, camera, tiles, zoomBudgetFor = null, wall = '#12100e', reducedMotion = false }) {
   const ctx = canvas.getContext('2d', { alpha: false });
   const view = { width: 0, height: 0, dpr: 1 };
   let world = { tier: 8, locality: 4, baseX: 0n, baseY: 0n, axisBits: 812 };
@@ -96,6 +96,16 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e', reducedMo
 
   const cellId = (i, j) => `${i},${j}`;
 
+  /**
+   * 지금 층의 줌 예산을 카메라에 적용한다.
+   *
+   * 화면 크기가 바뀔 때와 층이 바뀔 때 둘 다 필요하다. 예산이 어디서 오는지는
+   * 주입받는다. 그래야 stage 가 층 정책을 알지 않아도 된다.
+   */
+  function applyZoomBudget() {
+    camera.setViewport(view.width, view.height, zoomBudgetFor?.(world.tier) ?? null);
+  }
+
   function resize() {
     const rect = canvas.getBoundingClientRect();
     view.dpr = Math.min(window.devicePixelRatio || 1, 2.5);
@@ -104,7 +114,7 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e', reducedMo
     canvas.width = Math.max(1, Math.round(rect.width * view.dpr));
     canvas.height = Math.max(1, Math.round(rect.height * view.dpr));
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    camera.setViewport(view.width, view.height);
+    applyZoomBudget();
   }
 
   /**
@@ -303,10 +313,14 @@ export function createStage({ canvas, camera, tiles, wall = '#12100e', reducedMo
      * 앞으로 나온 칸의 기록도 버린다. 새 미술관의 같은 번호 칸은 다른 그림이다.
      */
     setWorld(next) {
+      const previousTier = world.tier;
       world = { ...world, ...next };
       axisMask = (1n << BigInt(world.axisBits)) - 1n;
       worldId++;
       lift.clear();
+      // 층이 바뀌면 줌 한계도 바뀐다. 깊은 층은 멀리 보지 못한다.
+      // 여기서 다시 적용하지 않으면 다음 resize 까지 이전 층의 한계가 남는다.
+      if (world.tier !== previousTier) applyZoomBudget();
     },
 
     setFocus(cell) {
