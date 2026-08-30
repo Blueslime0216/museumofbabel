@@ -99,6 +99,10 @@ export function createSheet({ toast, onShow }) {
 
     const rows = [
       [t('sheet.floor'), `${artwork.tier} × ${artwork.tier}`],
+      // 전시실은 번호로만 보여 준다. 방마다 이름을 붙이는 것은 미감 결정이고,
+      // 31개 x 5개 언어를 미감이 확정되기 전에 번역할 이유가 없다.
+      // 값은 숫자뿐이므로 사전에 넣지 않는다. 낱말 없는 항목은 번역이 아니다.
+      [t('sheet.room'), `${info.room.index + 1} / ${info.room.total}`],
       [t('sheet.zones'), String(info.zones)],
       [t('sheet.addressSize'), `${info.bytes} B · ${info.bits} bit`],
       [t('sheet.quantization'), `${info.quant} / 15`],

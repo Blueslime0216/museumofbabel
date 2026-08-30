@@ -37,6 +37,7 @@ export default {
   "sheet.expand": "нажмите, чтобы раскрыть",
   "sheet.record": "Запись",
   "sheet.floor": "Этаж",
+  "sheet.room": "Зал",
   "sheet.zones": "Зоны",
   "sheet.addressSize": "Адрес",
   "sheet.quantization": "Квантование",

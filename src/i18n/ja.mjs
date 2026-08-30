@@ -36,6 +36,7 @@ export default {
   "sheet.expand": "押して全体を見る",
   "sheet.record": "記録",
   "sheet.floor": "階",
+  "sheet.room": "展示室",
   "sheet.zones": "区画",
   "sheet.addressSize": "アドレス",
   "sheet.quantization": "量子化",

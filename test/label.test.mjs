@@ -7,6 +7,8 @@ import {
   coordinatesToCode,
   randomCoordinate,
   decodeFields,
+  ROOMS,
+  CLUSTER_SPAN,
 } from '../src/codec.mjs';
 
 const TIER = 8;
@@ -230,4 +232,47 @@ test('같은 좌표의 두 언어 제목이 같은 자리에서 나온다', () =
 test('없는 언어는 영어로 떨어진다', () => {
   const [x, y] = randomCoordinate(spec.axisBits);
   assert.equal(at(x, y, 'zz').info.title, at(x, y, 'en').info.title);
+});
+
+// ── 전시실 ───────────────────────────────────────────────────────────────
+
+test('작품 정보에 전시실이 들어 있다', () => {
+  const spec = tierSpec(8);
+  const x = 0x51f3a2c4d1n;
+  const y = 0x2b90e7f16an;
+  const code = coordinatesToCode(x, y, localityMix(4, spec.axisBits), spec.axisBits);
+  const info = describe({ tier: 8, x, y, code, lang: 'ko' });
+
+  assert.ok(info.room, '전시실 정보가 없다');
+  assert.equal(info.room.total, ROOMS.length);
+  assert.ok(
+    info.room.index >= 0 && info.room.index < ROOMS.length,
+    `전시실 번호 ${info.room.index} 가 범위 밖이다`,
+  );
+  assert.equal(info.room.id, ROOMS[info.room.index].name);
+});
+
+test('전시실은 좌표에서 나온다 — 같은 코드워드도 자리가 다르면 다른 방이다', () => {
+  // 이것이 전시실 설계의 핵심이다. 코드워드만 보고는 방을 알 수 없다.
+  // 그래서 describe 가 x·y 를 받아야 한다.
+  const spec = tierSpec(8);
+  const code = 0x9e3779b97f4a7c15n;
+
+  const rooms = new Set();
+  for (let i = 0; i < 40; i++) {
+    const x = BigInt(i) * CLUSTER_SPAN + 12345n;
+    rooms.add(describe({ tier: 8, x, y: 67890n, code, lang: 'ko' }).room.index);
+  }
+  assert.ok(rooms.size >= 6, `같은 코드워드가 ${rooms.size}개 방에만 나타난다`);
+});
+
+test('전시실 정보가 언어와 무관하다', () => {
+  // 번호와 식별자는 번역 대상이 아니다. 방 이름은 미감 확정 후에 붙인다.
+  const spec = tierSpec(16);
+  const x = 0x77abcdn;
+  const y = 0x91def0n;
+  const code = coordinatesToCode(x, y, localityMix(4, spec.axisBits), spec.axisBits);
+  const ko = describe({ tier: 16, x, y, code, lang: 'ko' }).room;
+  const en = describe({ tier: 16, x, y, code, lang: 'en' }).room;
+  assert.deepEqual(ko, en);
 });

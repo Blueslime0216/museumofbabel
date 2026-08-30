@@ -33,6 +33,7 @@ export default {
   "sheet.expand": "tap to expand",
   "sheet.record": "Record",
   "sheet.floor": "Floor",
+  "sheet.room": "Room",
   "sheet.zones": "Zones",
   "sheet.addressSize": "Address",
   "sheet.quantization": "Quantization",

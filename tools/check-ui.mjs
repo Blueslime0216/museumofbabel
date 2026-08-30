@@ -991,6 +991,31 @@ for (const size of ['mobile', 'desktop']) {
   const koreanTitle = await page.evaluate(() => document.getElementById('plaque-title').textContent);
   check('한국어 제목이 한글이다', /[가-힣]/.test(koreanTitle), koreanTitle);
 
+  // 기록에 전시실이 있다. 전시실은 좌표에서 나오므로 이 줄이 없으면
+  // 관람객은 자기가 어느 방에 있는지 알 방법이 전혀 없다.
+  {
+    const record = await page.evaluate(() => {
+      const pairs = [];
+      const list = document.getElementById('record');
+      const dts = [...list.querySelectorAll('dt')];
+      const dds = [...list.querySelectorAll('dd')];
+      for (let i = 0; i < dts.length; i++) {
+        pairs.push([dts[i].textContent, dds[i]?.textContent ?? '']);
+      }
+      return pairs;
+    });
+    const room = record.find(([key]) => key === '전시실');
+    check('기록에 전시실이 있다', room !== undefined, record.map(r => r[0]).join(' · '));
+    check(
+      '전시실이 번호 / 전체 형태다',
+      room !== undefined && /^\d+ \/ \d+$/.test(room[1]),
+      room?.[1],
+    );
+    const total = room ? Number(room[1].split('/')[1].trim()) : 0;
+    const index = room ? Number(room[1].split('/')[0].trim()) : 0;
+    check('전시실 번호가 범위 안이다', index >= 1 && index <= total, `${index} / ${total}`);
+  }
+
   // 영어로 바꾼다
   await page.click('#btn-language');
   await page.waitForTimeout(250);

@@ -33,6 +33,7 @@ export default {
   "sheet.expand": "눌러서 전체 보기",
   "sheet.record": "기록",
   "sheet.floor": "층",
+  "sheet.room": "전시실",
   "sheet.zones": "구역",
   "sheet.addressSize": "주소",
   "sheet.quantization": "양자화",

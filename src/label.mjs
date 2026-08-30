@@ -27,7 +27,7 @@
 // 하나라도 어긋나면 같은 좌표가 언어에 따라 다른 자리에서 나온다.
 // `test/label.test.mjs` 가 크기를 직접 센다.
 
-import { tierSpec, decodeFields, toBase36 } from './codec.mjs';
+import { tierSpec, decodeFields, toBase36, roomOf, ROOMS } from './codec.mjs';
 import { language } from './i18n/index.mjs';
 
 /** Cb·Cr 각도에 대응하는 색 이름. 0도가 파랑, 반시계로 돈다. 열두 개. */
@@ -280,6 +280,12 @@ export function describe({ tier, x, y, code, lang = language() }) {
   const y36 = toBase36(y);
   const accession = `${tier}-${x36.slice(-3)}${y36.slice(-3)}`;
 
+  // 전시실. 코드워드가 아니라 **좌표**에서 나온다.
+  //
+  // 그래서 이 값만은 code 로 계산할 수 없다. 같은 코드워드가 다른 자리에 있으면
+  // 다른 방이고, 따라서 다른 그림이다. 전시실을 좌표에서 유도하기로 한 결과다.
+  const roomIndex = roomOf(x, y);
+
   return {
     title,
     accession,
@@ -288,5 +294,6 @@ export function describe({ tier, x, y, code, lang = language() }) {
     bits: spec.totalBits,
     zones: spec.blockCount,
     palette: { primary, secondary },
+    room: { index: roomIndex, total: ROOMS.length, id: ROOMS[roomIndex].name },
   };
 }

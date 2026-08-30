@@ -36,6 +36,7 @@ export default {
   "sheet.expand": "点击展开",
   "sheet.record": "记录",
   "sheet.floor": "层",
+  "sheet.room": "展厅",
   // 「区块」现在多半让人想到区块链。这里说的是画面上的分区。
   "sheet.zones": "分区",
   "sheet.addressSize": "地址",
