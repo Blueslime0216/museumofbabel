@@ -1633,7 +1633,7 @@ for (const size of ['mobile', 'desktop']) {
   {
     const objects = await page.evaluate(() => window.__museum.lobby);
     const logo = objects.find(object => object.id === 'logo');
-    check('로비에 물건이 놓여 있다', objects.length > 0, `${objects.length}개`);
+    check('로비에 물건이 놓여 있다', objects.length >= 12, `${objects.length}개`);
     check('가운데에 표지가 있다', logo !== undefined && logo.x === 32 && logo.y === 32);
     check('표지의 그림이 실려 있다', logo?.hasImage === true);
     // 표지만 진짜 이미지다. 나머지는 주소로 그린다.
@@ -1646,6 +1646,58 @@ for (const size of ['mobile', 'desktop']) {
       window.__museum.lobby.map(object => object.size),
     );
     check('물건이 한 칸보다 크다', sizes.every(size => size > 1), sizes.join(' · '));
+    check(
+      '물건이 격자에 딱 맞지 않는다',
+      (await page.evaluate(() =>
+        window.__museum.lobby.some(object => object.x % 1 !== 0 || object.y % 1 !== 0),
+      )) === true,
+    );
+  }
+
+  // 오늘의 그림과 체험관 문
+  {
+    const objects = await page.evaluate(() => window.__museum.lobby);
+    const today = objects.filter(object => object.id.startsWith('today-'));
+    const workshop = objects.find(object => object.id === 'workshop');
+
+    check('오늘의 그림이 열 장 걸려 있다', today.length === 10, `${today.length}장`);
+    check(
+      '오늘의 그림이 모두 그려졌다',
+      today.every(object => object.hasImage),
+      `${today.filter(o => o.hasImage).length}/${today.length}`,
+    );
+    check('오늘의 그림은 누르면 그 자리로 간다', today.every(o => o.action === 'artwork'));
+    check('체험관 문이 있다', workshop !== undefined && workshop.hasImage === true);
+    // 문에 걸린 그림도 주소다. 진짜 이미지는 표지 하나뿐이다.
+    check(
+      '표지만 진짜 이미지다',
+      objects.filter(object => object.kind === 'logo').length === 1,
+      objects.map(o => o.kind).join(' · '),
+    );
+  }
+
+  // 체험관은 아직 문만 있다. 누르면 그 사실을 알린다.
+  //
+  // 누를 자리를 로비 좌표로 계산하면 안 된다. 화면의 칸 번호는 기준점에 대한
+  // 상대값이라 로비 좌표와 다르다. 표지가 화면 가운데 있다는 것만 쓰고, 문은
+  // 표지에서 11칸 아래라는 **상대 거리**로 찾는다. 상대 거리는 두 좌표계에서 같다.
+  {
+    const aim = await page.evaluate(() => {
+      const zoom = window.__museum.camera.zoom;
+      return [window.innerWidth / 2, window.innerHeight / 2 + 11 * zoom];
+    });
+
+    const found = await page.evaluate(
+      ([x, y]) => window.__museum.stage.lobbyObjectAt(x, y)?.id ?? null,
+      aim,
+    );
+    check('표지 아래 11칸에 체험관 문이 있다', found === 'workshop', String(found));
+
+    const before = await page.locator('.toast').count();
+    await page.mouse.click(aim[0], aim[1]);
+    await page.waitForTimeout(600);
+    const after = await page.locator('.toast').count();
+    check('체험관 문을 누르면 준비 중임을 알린다', after > before, `토스트 ${before} → ${after}`);
   }
 
   // 화면에 로비가 넓게 보인다. 물건 하나가 화면을 덮으면 장소로 읽히지 않는다.

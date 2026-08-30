@@ -71,6 +71,11 @@ export default {
   // ── 展厅名称 ────────────────────────────────────────────────────────────
   //
   // 以「厅」为主，像美术馆的指示牌。不用日语的假名。
+  "lobby.logo": "巴别美术馆",
+  "lobby.today": "今日之画",
+  "lobby.patron": "赞助者寄存",
+  "lobby.workshop": "体验室",
+  "toast.workshopSoon": "体验室还在筹备中",
   "room.BASE": "正厅",
   "room.FLAT_MOSAIC": "瓷砖厅",
   "room.WEAVE": "织造厅",

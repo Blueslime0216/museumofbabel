@@ -68,6 +68,11 @@ export default {
   // ── 전시실 이름 ─────────────────────────────────────────────────────────
   //
   // 안내판처럼 읽히게 짧게 짓는다. `～전시실` 을 반복하지 않는다.
+  "lobby.logo": "바벨의 미술관",
+  "lobby.today": "오늘의 그림",
+  "lobby.patron": "후원자 대여작",
+  "lobby.workshop": "체험관",
+  "toast.workshopSoon": "체험관은 아직 준비 중입니다",
   "room.BASE": "대회랑",
   "room.FLAT_MOSAIC": "타일의 방",
   "room.WEAVE": "직조실",

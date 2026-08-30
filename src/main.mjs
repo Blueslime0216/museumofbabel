@@ -17,8 +17,14 @@ import {
   randomCoordinate,
   axisBitsFor,
   isLobbyTier,
+  // 로비 물건의 그림을 여기서 직접 그린다. 이유는 renderAddress 참조.
+  CANVAS,
+  renderCode,
+  createFrame,
+  styleAt,
 } from './codec.mjs';
 import { lobbyHome, lobbyObjects } from './lobby.mjs';
+import { PATRONS } from './patrons.mjs';
 import { createCamera, MIN_CELL } from './camera.mjs';
 import { zoomBudgetFor, isDeepestFloor } from './floors.mjs';
 import { ROOMS, CLUSTER_SPAN, roomOf } from './codec.mjs';
@@ -216,17 +222,46 @@ async function loadLogo() {
  *
  * 작품 층에서는 목록을 비운다. 그러면 stage 의 물건 레이어가 통째로 건너뛰어진다.
  */
+/**
+ * 주소 하나를 그려서 비트맵으로 만든다.
+ *
+ * 워커를 쓰지 않는다. 로비 물건은 서른 장쯤이고 한 장이 0.5~1.1ms 이므로 전부
+ * 합쳐도 한 프레임 남짓이다. 게다가 이 일은 **커튼 뒤에서** 한 번만 일어난다.
+ * 워커로 보내면 tier 가 층마다 다른 것(타일은 지금 층 하나만 쓴다)을 다루려고
+ * 그쪽 계약을 넓혀야 하는데, 얻는 것이 없다.
+ */
+async function renderAddress({ tier, locality, x, y }) {
+  const artSpec = tierSpec(tier);
+  const code = coordinatesToCode(x, y, localityMix(locality, artSpec.axisBits), artSpec.axisBits);
+  // 전시실을 적용한다. 로비에 걸린 그림도 그 좌표에 실제로 걸려 있는 그림이어야
+  // 한다. 눌러서 찾아갔을 때 다른 그림이 나오면 로비가 거짓말을 한 것이 된다.
+  const frame = renderCode(artSpec, code, createFrame(artSpec), styleAt(x, y));
+  return createImageBitmap(new ImageData(new Uint8ClampedArray(frame.rgba), CANVAS, CANVAS));
+}
+
 async function prepareLobby() {
   if (!isLobbyTier(state.tier)) {
     stage.setLobbyObjects([]);
     return;
   }
 
-  const objects = lobbyObjects();
-  const logo = await loadLogo();
-  for (const object of objects) {
-    if (object.kind === 'logo') object.bitmap = logo;
-  }
+  const objects = lobbyObjects({ patrons: PATRONS });
+
+  await Promise.all(
+    objects.map(async object => {
+      if (object.kind === 'logo') {
+        object.bitmap = await loadLogo();
+        return;
+      }
+      try {
+        object.bitmap = await renderAddress(object.address);
+      } catch {
+        // 한 장을 못 그려도 로비는 걸어 다닐 수 있어야 한다. 빈 자리로 남는다.
+        object.bitmap = null;
+      }
+    }),
+  );
+
   stage.setLobbyObjects(objects);
 }
 
@@ -237,8 +272,16 @@ async function prepareLobby() {
  * 맞다. 눌리는 물건(오늘의 그림 · 후원자 · 체험관 포털)은 뒤에 들어온다.
  */
 function tapLobbyObject(object) {
+  // 그림을 누르면 그 그림이 실제로 걸려 있는 자리로 간다. 오늘의 그림과 후원자의
+  // 그림이 그렇다. 로비에서 본 것과 도착해서 보는 것이 같아야 한다.
   if (object.action === 'artwork' && object.address) {
     goto(object.address);
+    return;
+  }
+
+  // 체험관은 아직 문만 있다. 안이 비어 있는데 들여보내면 나오는 길을 찾아야 한다.
+  if (object.action === 'workshop') {
+    toast(t('toast.workshopSoon'));
   }
 }
 

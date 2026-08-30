@@ -72,6 +72,11 @@ export default {
   // 번호는 기억에 남지 않는다. 그래서 그 방이 실제로 무엇처럼 보이는지에서
   // 이름을 끌어냈다. 직역하지 않는다 — 각 언어에서 미술관 안내판으로 읽히는
   // 말을 골랐고, 문화권에 더 잘 닿는 낱말이 있으면 그것을 썼다.
+  "lobby.logo": "Museum of Babel",
+  "lobby.today": "Picture of the day",
+  "lobby.patron": "On loan from a patron",
+  "lobby.workshop": "Workshop",
+  "toast.workshopSoon": "The workshop is still being built",
   "room.BASE": "The Great Hall",
   "room.FLAT_MOSAIC": "Hall of Tiles",
   "room.WEAVE": "The Loom",

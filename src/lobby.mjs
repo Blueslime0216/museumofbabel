@@ -38,7 +38,7 @@
 // 이미지를 가져오지 않는다"가 로비에서도 지켜진다. 후원자의 사진을 호스팅하지
 // 않는 이유도 이것이다.
 
-import { CANVAS, LOBBY_AXIS_BITS, axisSize } from './codec.mjs';
+import { CANVAS, LOBBY_AXIS_BITS, axisSize, axisBitsFor } from './codec.mjs';
 
 /** 로비 한 변의 칸 수. 이만큼 걸으면 제자리로 온다. */
 export const LOBBY_SPAN = axisSize(LOBBY_AXIS_BITS);
@@ -116,6 +116,110 @@ export const LOGO_SIZE = 7;
 /** 물건끼리 이만큼은 떨어져 있어야 한다(칸). 겹침 방지가 이 값을 쓴다. */
 export const MIN_GAP = 1.2;
 
+/** 오늘의 그림 개수. */
+export const TODAY_COUNT = 10;
+
+/** 오늘의 그림 한 변(칸). */
+const TODAY_SIZE = 4;
+
+/** 후원자 그림 한 변(칸). 오늘의 그림보다 조금 작다. */
+const PATRON_SIZE = 3.5;
+
+/** 체험관 문 한 변(칸). */
+const WORKSHOP_SIZE = 5;
+
+/**
+ * 물건을 놓을 고리. 로고 중심에서 이 거리 사이에 흩어진다.
+ *
+ * 안쪽은 로고(7칸)와 겹치지 않을 만큼, 바깥쪽은 첫 화면에 들어올 만큼이다.
+ * 데스크톱에서 화면에 36칸쯤 보이므로 반경 17이면 대체로 한눈에 들어온다.
+ */
+const RING = { inner: 7.5, outer: 17 };
+
+/**
+ * 오늘의 그림이 걸리는 층.
+ *
+ * 층을 섞는다. 층 4는 블록이 커서 색면처럼 보이고 층 32는 아주 세밀하다.
+ * 한 층으로만 채우면 열 장이 다 비슷해 보인다.
+ */
+const TODAY_TIERS = [4, 8, 16, 32];
+
+/** 로비 물건의 국소성 단계. 주소에 들어가므로 하나로 고정한다. */
+const LOBBY_LOCALITY = 4;
+
+// ── 결정론적 난수 ────────────────────────────────────────────────────────
+//
+// 같은 날에 접속한 사람은 모두 같은 로비를 봐야 한다. "오늘의 그림" 이 사람마다
+// 다르면 그것을 두고 이야기할 수 없다. 그래서 난수의 시드가 날짜다.
+//
+// 저장소도 서버도 없다. 날짜만으로 같은 배치가 다시 나온다.
+
+/** xorshift32. 작품의 규율과 같다 — 같은 시드는 늘 같은 결과다. */
+function seeded(seed) {
+  let state = seed >>> 0 || 1;
+  return () => {
+    state ^= state << 13;
+    state >>>= 0;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    state >>>= 0;
+    return state / 4294967296;
+  };
+}
+
+/**
+ * 날짜를 시드로. 지역 시간의 날짜를 쓴다.
+ *
+ * UTC 로 하면 어떤 지역에서는 아침에 "오늘의 그림" 이 바뀐다. 지역 날짜면 시간대
+ * 마다 로비가 다르지만, 각 사람에게는 자기 하루와 맞는다. 그쪽이 낫다.
+ */
+export function daySeed(date = new Date()) {
+  return (date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate()) >>> 0;
+}
+
+/** 난수로 축 비트만큼의 좌표를 만든다. 32비트씩 이어 붙인다. */
+function randomAxis(random, axisBits) {
+  let value = 0n;
+  for (let filled = 0; filled < axisBits; filled += 32) {
+    value = (value << 32n) | BigInt(Math.floor(random() * 4294967296));
+  }
+  return value & ((1n << BigInt(axisBits)) - 1n);
+}
+
+// ── 겹치지 않게 놓기 ─────────────────────────────────────────────────────
+
+/**
+ * 정사각형 두 개가 떨어져 있는가.
+ *
+ * 물건이 모두 정사각형이므로 축마다 따로 보면 된다(AABB). 원으로 보면 모서리가
+ * 겹치는 것을 놓친다.
+ */
+function apart(a, b) {
+  const need = (a.size + b.size) / 2 + MIN_GAP;
+  return Math.abs(a.x - b.x) >= need || Math.abs(a.y - b.y) >= need;
+}
+
+/**
+ * 고리 안의 빈 자리를 찾는다. 못 찾으면 null.
+ *
+ * 순환은 여기서 무시한다. 고리의 바깥 반경이 17이고 중심이 32이므로 15~49 범위에
+ * 머물러 로비 경계(0·63)에 닿지 않는다. 경계에 닿게 넓히면 x=63 과 x=0 이
+ * 이웃이라는 것을 여기서도 봐야 한다.
+ */
+function findSpot(random, size, taken, centre) {
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const angle = random() * Math.PI * 2;
+    const radius = RING.inner + random() * (RING.outer - RING.inner);
+    const spot = {
+      x: centre + Math.cos(angle) * radius,
+      y: centre + Math.sin(angle) * radius,
+      size,
+    };
+    if (taken.every(other => apart(spot, other))) return spot;
+  }
+  return null;
+}
+
 /**
  * 중앙 로고.
  *
@@ -137,14 +241,109 @@ function logoObject() {
 }
 
 /**
+ * 체험관 문.
+ *
+ * 자리를 고정한다. 로고 바로 아래다. 날마다 옮겨 다니면 "저기 있었는데" 가
+ * 성립하지 않고, 다시 찾아오는 사람이 매번 헤맨다. 오늘의 그림은 날마다 바뀌어도
+ * 되지만 문은 문이어야 한다.
+ */
+function workshopObject() {
+  const centre = Number(LOBBY_SPAN / 2n);
+  return {
+    id: 'workshop',
+    kind: 'art',
+    x: centre,
+    y: centre + 11,
+    size: WORKSHOP_SIZE,
+    labelKey: 'lobby.workshop',
+    action: 'workshop',
+    // 문에 걸린 그림도 좌표다. 고정된 주소이므로 늘 같은 그림이 걸려 있다.
+    address: { tier: 8, locality: LOBBY_LOCALITY, x: 0x2b17f4c903n, y: 0x51e08a67d2n },
+  };
+}
+
+/**
  * 로비에 놓을 물건 전체.
  *
  * 날짜를 받는다. "오늘의 그림" 이 그 날짜를 시드로 하므로, 같은 날에 접속한
  * 사람은 모두 같은 로비를 본다. 날짜를 넘기게 해 둔 것은 검사가 시간을 고정할
  * 수 있게 하려는 것이다.
+ *
+ * 순서가 곧 놓는 순서다. 먼저 놓인 것이 자리를 차지하고 나중 것이 피한다.
+ *   1. 로고와 체험관 문   자리가 고정이다
+ *   2. 자리를 적어 둔 후원자
+ *   3. 자리를 적지 않은 후원자
+ *   4. 오늘의 그림
+ * 후원자를 오늘의 그림보다 먼저 놓는다. 날마다 바뀌는 것이 사람의 자리를
+ * 밀어내면 안 된다.
  */
 export function lobbyObjects({ date = new Date(), patrons = [] } = {}) {
-  void date;
-  void patrons;
-  return [logoObject()];
+  const centre = Number(LOBBY_SPAN / 2n);
+  const random = seeded(daySeed(date));
+
+  const objects = [logoObject(), workshopObject()];
+  // 겹침 검사에 쓰는 자리 목록. 물건과 같은 모양이면 된다.
+  const taken = objects.map(object => ({ x: object.x, y: object.y, size: object.size }));
+
+  // ── 후원자 ──
+  const fixed = patrons.filter(patron => patron.at);
+  const floating = patrons.filter(patron => !patron.at);
+
+  for (const [index, patron] of fixed.entries()) {
+    const spot = { x: patron.at.x, y: patron.at.y, size: PATRON_SIZE };
+    objects.push({
+      id: `patron-${index}`,
+      kind: 'art',
+      ...spot,
+      name: patron.name,
+      labelKey: 'lobby.patron',
+      action: 'artwork',
+      address: patron.address,
+    });
+    taken.push(spot);
+  }
+
+  for (const [index, patron] of floating.entries()) {
+    const spot = findSpot(random, PATRON_SIZE, taken, centre);
+    if (!spot) continue; // 자리가 없으면 걸지 않는다. 겹쳐 거는 것보다 낫다
+    objects.push({
+      id: `patron-${fixed.length + index}`,
+      kind: 'art',
+      ...spot,
+      name: patron.name,
+      labelKey: 'lobby.patron',
+      action: 'artwork',
+      address: patron.address,
+    });
+    taken.push(spot);
+  }
+
+  // ── 오늘의 그림 ──
+  //
+  // 좌표를 무작위로 뽑는다. 보기 좋은 것을 골라 두지 않는다 — 무작위 좌표는
+  // 무작위 그림이고, 그것이 이 미술관의 정직한 성질이다. 골라 두면 "모든 그림이
+  // 이미 걸려 있다" 가 "우리가 고른 그림이 걸려 있다" 로 바뀐다.
+  for (let index = 0; index < TODAY_COUNT; index++) {
+    const spot = findSpot(random, TODAY_SIZE, taken, centre);
+    if (!spot) continue;
+
+    const tier = TODAY_TIERS[Math.floor(random() * TODAY_TIERS.length)];
+    const axisBits = axisBitsFor(tier);
+    objects.push({
+      id: `today-${index}`,
+      kind: 'art',
+      ...spot,
+      labelKey: 'lobby.today',
+      action: 'artwork',
+      address: {
+        tier,
+        locality: LOBBY_LOCALITY,
+        x: randomAxis(random, axisBits),
+        y: randomAxis(random, axisBits),
+      },
+    });
+    taken.push(spot);
+  }
+
+  return objects;
 }

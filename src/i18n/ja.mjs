@@ -71,6 +71,11 @@ export default {
   //
   // 「〜の間」を基本にする。日本の美術館の札に近い言い方を選んだ。
   // 中国語の辞書と同じ漢字だけにならないよう、仮名を入れて書き分けている。
+  "lobby.logo": "バベルの美術館",
+  "lobby.today": "今日の絵",
+  "lobby.patron": "支援者からの寄託",
+  "lobby.workshop": "体験室",
+  "toast.workshopSoon": "体験室はまだ準備中です",
   "room.BASE": "大回廊",
   "room.FLAT_MOSAIC": "陶板の間",
   "room.WEAVE": "織りの間",
