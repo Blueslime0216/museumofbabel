@@ -116,7 +116,9 @@ body[data-sheet='expanded'] .controls {
  * 옆으로만 길어지는 토스트는 읽기도 나쁘다.
  */
 .toast {
-  padding: 10px 16px;
+  position: relative;
+  overflow: hidden;
+  padding: 10px 16px 12px;
   font: 700 13px/1.35 var(--sans);
   letter-spacing: 0.02em;
   width: max-content;
@@ -127,6 +129,27 @@ body[data-sheet='expanded'] .controls {
 }
 .toast[data-out='1'] {
   animation: toast-out 260ms var(--ease) forwards;
+}
+
+/* 남은 시간. 오른쪽으로 줄어들며 사라질 때를 알려 준다.
+ * 길이는 --toast-life 하나에서 나온다 (toast.mjs 가 넣는다). */
+.toast-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: currentColor;
+  transform-origin: left center;
+  animation: toast-drain var(--toast-life, 2600ms) linear forwards;
+}
+@keyframes toast-drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
 }
 @keyframes toast-in {
   from {
@@ -346,12 +369,34 @@ body[data-sheet='expanded'] .controls {
   -webkit-text-stroke-color: var(--edge-toast);
   padding-left: 12px;
 }
-.lang-native {
-  font-size: 12.5px;
-  opacity: 0.85;
-}
 .lang:active {
   filter: invert(1);
+}
+
+/* 언어 칸만 가운데 정렬한다.
+ *
+ * `.lang` 은 층 고르기 목록도 함께 쓴다(floor.mjs). 그쪽은 이름과 설명을 양 끝으로
+ * 미는 것이 맞으므로, 여기서 바꾸는 것은 `#lang-list` 안으로 묶는다. */
+#lang-list .lang {
+  align-items: center;
+  justify-content: center;
+  min-height: 58px;
+  padding: 0 10px;
+  font-size: 17px;
+  text-align: center;
+}
+/* 고른 칸을 왼쪽으로 들여쓰면 가운데 정렬이 어긋난다. 층 목록에서는 그 들여쓰기가
+ * 맞으므로 여기서만 되돌린다. */
+#lang-list .lang[aria-current='true'] {
+  padding-left: 10px;
+}
+.lang-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+}
+.lang-native {
+  opacity: 0.9;
 }
 
 /* 층 고르기 — 찾기 모달 안의 작은 조각 나누기 */

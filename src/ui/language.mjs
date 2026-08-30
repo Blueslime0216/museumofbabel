@@ -19,13 +19,27 @@ export function createLanguagePicker({ onChange }) {
         button.dataset.lang = code;
         if (code === language()) button.setAttribute('aria-current', 'true');
 
-        const name = document.createElement('span');
-        name.textContent = info.name;
-        const native = document.createElement('span');
-        native.className = 'lang-native';
-        native.textContent = info.native;
+        // `Korean (한국어)` 처럼 한 줄로 모아 가운데 놓는다. 예전에는 이름과
+        // 자국어 표기를 양 끝으로 밀어 두었는데, 칸이 넓어서 둘이 멀찍이 떨어져
+        // 한 언어의 두 표기로 읽히지 않았다.
+        //
+        // 자국어 표기는 **따로 감싼다.** 화면 검사가 "영어를 골랐을 때 화면에
+        // 한글이 남아 있지 않다" 를 확인하는데, 언어 목록의 자국어 표기는 일부러
+        // 그 나라 글자로 두는 예외다. 그 예외를 `.lang-native` 로 알아본다.
+        const label = document.createElement('span');
+        label.className = 'lang-label';
 
-        button.append(name, native);
+        if (info.native === info.name) {
+          // 영어처럼 두 표기가 같으면 괄호가 군더더기다
+          label.textContent = info.name;
+        } else {
+          const native = document.createElement('span');
+          native.className = 'lang-native';
+          native.textContent = info.native;
+          label.append(document.createTextNode(`${info.name} (`), native, document.createTextNode(')'));
+        }
+
+        button.append(label);
         item.append(button);
         return item;
       }),

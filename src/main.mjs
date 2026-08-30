@@ -309,6 +309,48 @@ const ARROWS = {
   ArrowDown: [0, 1],
 };
 
+/**
+ * 지금 눌려 있는 방향키.
+ *
+ * keydown 이벤트 하나는 키 하나만 알려 준다. 그래서 그 키만 보면 두 방향을 함께
+ * 눌러도 마지막 것만 먹고 대각선으로 가지 않는다. 눌린 것을 모아 두고 **합쳐서**
+ * 한 걸음을 만든다.
+ *
+ * 운영체제의 키 반복은 마지막 키에 대해서만 오지만, 반복이 올 때마다 이 집합
+ * 전체를 다시 읽으므로 대각선이 유지된다.
+ */
+const heldArrows = new Set();
+
+/** 눌린 방향키를 합친 한 걸음. 좌우나 상하를 함께 누르면 서로 지운다. */
+function arrowStep() {
+  let dx = 0;
+  let dy = 0;
+  for (const key of heldArrows) {
+    const [mx, my] = ARROWS[key];
+    dx += mx;
+    dy += my;
+  }
+  return [dx, dy];
+}
+
+/**
+ * 눌린 것을 모두 놓는다.
+ *
+ * 창이 포커스를 잃으면 keyup 이 오지 않는다. 그대로 두면 키가 눌린 채로 남아
+ * 돌아왔을 때 엉뚱한 대각선이 된다. 실제로 Alt+Tab 으로 재현된다.
+ */
+function releaseArrows() {
+  heldArrows.clear();
+}
+
+window.addEventListener('keyup', event => {
+  heldArrows.delete(event.key);
+});
+window.addEventListener('blur', releaseArrows);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) releaseArrows();
+});
+
 window.addEventListener('keydown', event => {
   // 모달이 열려 있으면 그것이 먼저 닫힌다.
   if (event.key === 'Escape' && (search.isOpen || languagePicker.isOpen || floorPicker.isOpen)) {
@@ -330,17 +372,22 @@ window.addEventListener('keydown', event => {
     return;
   }
 
-  const move = ARROWS[event.key];
-  if (move) {
+  if (event.key in ARROWS) {
     if (curtain.busy) return;
     event.preventDefault();
+    heldArrows.add(event.key);
+
+    // 마주보는 두 방향을 함께 누르면 서로 지워서 갈 곳이 없다.
+    const [dx, dy] = arrowStep();
+    if (dx === 0 && dy === 0) return;
+
     hint.hide();
     keyboardMode = true;
     document.body.dataset.keyboard = '1';
 
     // 고른 것이 없으면 화면 중앙에서 출발한다.
     const from = stage.focus ?? { i: Math.round(camera.x), j: Math.round(camera.y) };
-    focusCell(from.i + move[0], from.j + move[1], { reading: true });
+    focusCell(from.i + dx, from.j + dy, { reading: true });
     return;
   }
 
@@ -493,5 +540,7 @@ Object.assign(window, {
     jumpRandom,
     goto,
     focusCell,
+    // 화면 검사가 토스트의 머무는 시간과 남은 시간 표시를 직접 확인한다.
+    toast,
   },
 });

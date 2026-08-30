@@ -1309,6 +1309,149 @@ for (const size of ['mobile', 'desktop']) {
   await page.close();
 }
 
+// ── 5.6 — 조작과 알림의 잔가지 ───────────────────────────────────────────
+//
+// 자기 페이지에서 돌린다. 앞의 검사들이 카메라 자리에 기대고 있어서, 그 흐름
+// 안에 끼워 넣으면 뒤의 픽셀 비교를 흔든다.
+
+{
+  const page = await openPage('desktop');
+  await settled(page);
+
+  // 방향키 두 개를 함께 누르면 대각선으로 간다
+  //
+  // keydown 이벤트 하나는 키 하나만 알려 준다. 그래서 예전에는 두 방향을 함께
+  // 눌러도 마지막 것만 먹었다. `down` 으로 누른 채로 두어야 그 상태를 만든다.
+  {
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(450);
+    const from = await page.evaluate(() => window.__museum.focus.cell);
+
+    await page.keyboard.down('ArrowRight');
+    await page.keyboard.down('ArrowDown');
+    await page.waitForTimeout(450);
+    const to = await page.evaluate(() => window.__museum.focus.cell);
+    await page.keyboard.up('ArrowDown');
+    await page.keyboard.up('ArrowRight');
+
+    check(
+      '방향키 두 개를 함께 누르면 대각선으로 간다',
+      to.i > from.i && to.j > from.j,
+      `(${from.i}, ${from.j}) → (${to.i}, ${to.j})`,
+    );
+  }
+
+  // 마주보는 두 방향은 서로 지운다
+  //
+  // 먼저 누른 키는 단독으로 눌린 것이므로 한 칸 가는 것이 맞다. 확인할 것은
+  // **둘을 함께 쥐고 있는 동안** 키 반복이 와도 더 움직이지 않는다는 것이다.
+  {
+    await page.keyboard.down('ArrowLeft');
+    await page.keyboard.down('ArrowRight');
+    await page.waitForTimeout(250);
+    const held = await page.evaluate(() => window.__museum.focus.cell);
+    await page.waitForTimeout(700); // 키 반복이 여러 번 올 만큼
+    const still = await page.evaluate(() => window.__museum.focus.cell);
+    await page.keyboard.up('ArrowLeft');
+    await page.keyboard.up('ArrowRight');
+
+    check(
+      '좌우를 함께 쥐고 있으면 더 움직이지 않는다',
+      still.i === held.i && still.j === held.j,
+      `(${held.i}, ${held.j}) → (${still.i}, ${still.j})`,
+    );
+  }
+
+  // 토스트: 문구가 길면 더 오래 머물고, 남은 시간이 보인다
+  {
+    const lives = await page.evaluate(() => {
+      // toast.mjs 의 계산을 화면에서 직접 부를 수는 없으므로, 실제로 띄워
+      // --toast-life 를 읽는다. 값이 CSS 변수로 나오는 것 자체가 계약이다.
+      const host = document.getElementById('toasts');
+      const spawn = message => {
+        const before = host.childElementCount;
+        window.__museum.toast(message);
+        const element = host.children[before];
+        const life = getComputedStyle(element).getPropertyValue('--toast-life').trim();
+        const bar = element.querySelector('.toast-progress');
+        const width = bar ? bar.getBoundingClientRect().width : 0;
+        return { life: Number.parseInt(life, 10), hasBar: Boolean(bar), width };
+      };
+      const short = spawn('짧다');
+      const long = spawn(
+        '이것은 일부러 아주 길게 쓴 문구다. 다 읽을 시간을 주는지 보려고 늘려 두었다.',
+      );
+      return { short, long };
+    });
+
+    check(
+      '토스트에 남은 시간 표시가 있다',
+      lives.short.hasBar && lives.short.width > 0,
+      `너비 ${Math.round(lives.short.width)}px`,
+    );
+    check(
+      '긴 문구가 더 오래 머문다',
+      lives.long.life > lives.short.life,
+      `${lives.short.life}ms → ${lives.long.life}ms`,
+    );
+    check(
+      '토스트가 예전 고정값(2.4초)보다 오래 머문다',
+      lives.short.life >= 2600,
+      `${lives.short.life}ms`,
+    );
+  }
+
+  // 언어 칸이 `이름 (자국어)` 한 줄이고 가운데 있다
+  {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    await page.click('#btn-language');
+    await page.waitForTimeout(250);
+
+    const langs = await page.$$eval('#lang-list .lang', nodes =>
+      nodes.map(node => {
+        const box = node.getBoundingClientRect();
+        const label = node.querySelector('.lang-label');
+        const inner = label.getBoundingClientRect();
+        return {
+          code: node.dataset.lang,
+          text: node.textContent.trim(),
+          // 좌우 여백이 비슷하면 가운데 있다
+          offCentre: Math.abs(
+            inner.left - box.left - (box.right - inner.right),
+          ),
+          fontSize: Number.parseFloat(getComputedStyle(node).fontSize),
+          // 위아래 여백이 비슷하면 세로로도 가운데 있다
+          offMiddle: Math.abs(inner.top - box.top - (box.bottom - inner.bottom)),
+        };
+      }),
+    );
+
+    const korean = langs.find(l => l.code === 'ko');
+    const english = langs.find(l => l.code === 'en');
+
+    check('언어 칸이 `이름 (자국어)` 한 줄이다', korean.text === 'Korean (한국어)', korean.text);
+    check(
+      '두 표기가 같은 언어는 괄호를 붙이지 않는다',
+      english.text === 'English',
+      english.text,
+    );
+    check(
+      '언어 칸의 글자가 가로세로 모두 가운데다',
+      langs.every(l => l.offCentre <= 2 && l.offMiddle <= 3),
+      langs.map(l => `${l.code} ${l.offCentre.toFixed(1)}/${l.offMiddle.toFixed(1)}`).join(' · '),
+    );
+    check(
+      '언어 칸의 글자가 예전보다 크다',
+      korean.fontSize >= 16,
+      `${korean.fontSize}px`,
+    );
+  }
+
+  check('잔가지 검사에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
+  await page.close();
+}
+
 await browser.close();
 rmSync(temp, { recursive: true, force: true });
 
