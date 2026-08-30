@@ -142,8 +142,10 @@ export function createInput({
     if (wasSingle) {
       const quick = performance.now() - startedAt < TAP_MS;
       if (moved < TAP_SLOP && quick && !blocked()) {
+        // 화면 좌표도 함께 넘긴다. 로비의 물건은 격자 칸이 아니라 실수 좌표에
+        // 얹혀 있어서, 칸 번호만으로는 무엇을 눌렀는지 알 수 없다.
         const [i, j] = stage.cellAt(point[0], point[1]);
-        onTap?.(i, j);
+        onTap?.(i, j, point[0], point[1]);
       }
       onGestureEnd?.();
     }

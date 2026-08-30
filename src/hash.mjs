@@ -29,8 +29,10 @@ import {
   axisBitsFor,
   DEFAULT_TIER,
   DEFAULT_LOCALITY,
+  LOBBY_TIER,
   randomCoordinate,
 } from './codec.mjs';
+import { lobbyHome } from './lobby.mjs';
 
 const MIN_GAP_MS = 500;
 
@@ -78,6 +80,17 @@ export function shareUrlFor(state) {
   return `${location.origin}${location.pathname}${queryFor(state)}`;
 }
 
+/**
+ * 로비 가운데. 주소 없이 들어왔을 때의 자리다.
+ *
+ * 미술관의 입구이므로 여기가 기본값이다. 무작위 좌표는 `r` 키와 무작위 버튼이
+ * 맡는다 — 그것은 관람객이 스스로 고르는 일이고, 처음 문을 열었을 때 일어날
+ * 일은 아니다.
+ */
+function lobbyState(extra) {
+  return { tier: LOBBY_TIER, locality: DEFAULT_LOCALITY, ...lobbyHome(), ...extra };
+}
+
 function randomState(extra) {
   const [x, y] = randomCoordinate(axisBitsFor(DEFAULT_TIER));
   return { tier: DEFAULT_TIER, locality: DEFAULT_LOCALITY, x, y, ...extra };
@@ -111,7 +124,9 @@ export function readState() {
       return { ...parseHash(`#${query.replace(/^#/, '')}`, axisBitsFor), fromUrl: true };
     } catch {
       // 남이 준 깨진 주소다. 조용히 무시하지 않고 호출한 쪽이 알린다.
-      return randomState({ fromUrl: false, broken: true });
+      // 입구로 돌려보낸다 — 무작위 좌표에 던지면 알림을 읽는 동안에도
+      // 자기가 어디 있는지 모른다.
+      return lobbyState({ fromUrl: false, broken: true });
     }
   }
 
@@ -119,11 +134,16 @@ export function readState() {
     try {
       return { ...parseHash(location.hash, axisBitsFor), fromUrl: true, legacy: true };
     } catch {
-      return randomState({ fromUrl: false, broken: true, legacy: true });
+      return lobbyState({ fromUrl: false, broken: true, legacy: true });
     }
   }
 
-  return randomState({ fromUrl: false });
+  // 주소 없이 들어왔다. **로비로 보낸다.**
+  //
+  // 예전에는 무작위 좌표였다. 그러면 처음 온 사람이 아무 설명 없이 낯선 그림
+  // 한가운데에 떨어진다. 여기가 무엇인지, 무엇을 할 수 있는지 알 방법이 없다.
+  // 로비 가운데에는 이 미술관의 표지가 있고, 거기서부터 걸어 나가면 된다.
+  return lobbyState({ fromUrl: false });
 }
 
 export function createHashWriter() {

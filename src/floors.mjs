@@ -67,10 +67,20 @@ export function isDeepestFloor(tier) {
  * 그것은 "적당한 속도로 탐색" 의 범위를 넘는다고 보고 덮지 않는다.
  */
 export function zoomBudgetFor(tier) {
-  // 로비는 작품을 그리지 않으므로 렌더 부담이 거의 없다. 그래서 1층과 같은
-  // 예산을 준다. 더 넓게 열 수도 있지만, 빈 격자를 멀리 보여 줄 이유가 없다.
+  // 로비는 작품 층과 정반대의 예산을 쓴다.
+  //
+  // 예전에는 1층과 같았다("빈 격자를 멀리 보여 줄 이유가 없다"). 로비에 물건이
+  // 놓이면서 그 전제가 뒤집혔다 — 로고 · 오늘의 그림 · 후원자 · 체험관 포털이
+  // 흩어져 있고, 그것들이 **한 화면에 함께 보여야** 로비가 장소로 읽힌다.
+  // 1층 줌에서는 로고 하나가 화면을 덮어 버려서 로비가 있는지도 알 수 없었다.
+  //
+  // 멀리 보여도 부담이 없다. 로비 칸은 벽 색에 아주 약한 결뿐이어서 그리는 값이
+  // 작품과 비교되지 않는다. 그래서 칸을 작게 허용하고 개수 상한을 크게 준다.
+  //
+  // 너무 멀리 열지는 않는다. 로비는 64칸에서 감기므로 화면에 64칸이 다 들어오면
+  // 순환 사본이 겹쳐 보인다. 실측으로 데스크톱 27칸 · 휴대폰 15칸쯤이 된다.
   if (isLobbyTier(tier)) {
-    return { maxVisible: MAX_VISIBLE, minCell: MIN_CELL, restScale: 1 };
+    return { maxVisible: 900, minCell: 24, restScale: 0.2 };
   }
   const level = Math.max(1, FLOORS.find(floor => floor.tier === tier)?.level ?? 1);
   const steps = level - 1;

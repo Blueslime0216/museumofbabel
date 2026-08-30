@@ -18,7 +18,7 @@ import {
   axisBitsFor,
   isLobbyTier,
 } from './codec.mjs';
-import { lobbyHome } from './lobby.mjs';
+import { lobbyHome, lobbyObjects } from './lobby.mjs';
 import { createCamera, MIN_CELL } from './camera.mjs';
 import { zoomBudgetFor, isDeepestFloor } from './floors.mjs';
 import { ROOMS, CLUSTER_SPAN, roomOf } from './codec.mjs';
@@ -189,6 +189,59 @@ function resize() {
 
 // ── 자리 옮기기 ──────────────────────────────────────────────────────────
 
+/**
+ * 로비 로고. 한 번만 읽어 두고 계속 쓴다.
+ *
+ * 이 미술관에서 **유일하게 좌표에서 나오지 않는 그림**이다. 표지는 계산될 수
+ * 없다. 나머지 물건은 전부 주소로 그린다.
+ */
+let logoImage = null;
+
+async function loadLogo() {
+  if (logoImage) return logoImage;
+  try {
+    const image = new Image();
+    image.src = 'logo.svg';
+    await image.decode();
+    logoImage = image;
+  } catch {
+    // 표지를 못 읽어도 로비는 걸어 다닐 수 있어야 한다. 빈 자리로 남는다.
+    logoImage = null;
+  }
+  return logoImage;
+}
+
+/**
+ * 로비에 놓을 물건을 준비한다. 커튼 뒤에서 부른다.
+ *
+ * 작품 층에서는 목록을 비운다. 그러면 stage 의 물건 레이어가 통째로 건너뛰어진다.
+ */
+async function prepareLobby() {
+  if (!isLobbyTier(state.tier)) {
+    stage.setLobbyObjects([]);
+    return;
+  }
+
+  const objects = lobbyObjects();
+  const logo = await loadLogo();
+  for (const object of objects) {
+    if (object.kind === 'logo') object.bitmap = logo;
+  }
+  stage.setLobbyObjects(objects);
+}
+
+/**
+ * 로비의 물건을 눌렀다.
+ *
+ * 로고에는 `action` 이 없다. 표지는 버튼이 아니므로 눌러도 아무 일이 없는 것이
+ * 맞다. 눌리는 물건(오늘의 그림 · 후원자 · 체험관 포털)은 뒤에 들어온다.
+ */
+function tapLobbyObject(object) {
+  if (object.action === 'artwork' && object.address) {
+    goto(object.address);
+  }
+}
+
 function applyWorld() {
   // 로비에는 명세가 없다. spec 을 쓰는 곳은 모두 작품 층 전용이어야 한다.
   spec = isLobbyTier(state.tier) ? null : tierSpec(state.tier);
@@ -231,6 +284,9 @@ function goto(next, { first = false } = {}) {
     //
     // preheat 은 아직 못 그린 개수를 돌려준다. 그 값과 이 기기의 한 장 시간으로
     // 이번 개방의 길이를 정한다.
+    // 로비의 물건도 커튼 뒤에서 준비한다. 개방 뒤에 툭 나타나면 안 된다.
+    await prepareLobby();
+
     const missing = await stage.preheat({ zoom: restZoom });
     curtain.setOpen(openDurationFor(missing));
 
@@ -317,9 +373,16 @@ const input = createInput({
   camera,
   stage,
   isBlocked: () => curtain.busy,
-  onTap: (i, j) => {
+  onTap: (i, j, screenX, screenY) => {
     keyboardMode = false;
     document.body.dataset.keyboard = '0';
+
+    // 로비에는 작품이 없다. 대신 놓인 물건이 눌린다.
+    if (isLobbyTier(state.tier)) {
+      const object = stage.lobbyObjectAt(screenX, screenY);
+      if (object) tapLobbyObject(object);
+      return;
+    }
 
     // 고른 것을 한 번 더 누르면 놓는다. 누른 곳이 어디든 토글로 읽힌다.
     const focus = stage.focus;
@@ -572,6 +635,18 @@ Object.assign(window, {
     },
     // 전시실. 화면 검사가 좌표 → 방 배정을 직접 확인한다.
     rooms: { ROOMS, CLUSTER_SPAN, roomOf },
+    /** 로비에 놓인 물건. 화면 검사가 자리와 개수를 직접 본다. */
+    get lobby() {
+      return stage.lobbyObjects.map(object => ({
+        id: object.id,
+        kind: object.kind,
+        x: object.x,
+        y: object.y,
+        size: object.size,
+        hasImage: Boolean(object.bitmap),
+        action: object.action ?? null,
+      }));
+    },
     get curtain() {
       return {
         phase: curtain.phase,
@@ -607,6 +682,8 @@ Object.assign(window, {
     jumpRandom,
     goto,
     focusCell,
+    // 화면 검사가 로비 물건의 눌리는 자리를 직접 확인한다.
+    stage: { lobbyObjectAt: (x, y) => stage.lobbyObjectAt(x, y) },
     // 화면 검사가 토스트의 머무는 시간과 남은 시간 표시를 직접 확인한다.
     toast,
   },

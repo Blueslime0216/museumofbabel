@@ -97,6 +97,71 @@ export function createStage({ canvas, camera, tiles, zoomBudgetFor = null, wall 
   const cellId = (i, j) => `${i},${j}`;
 
   /**
+   * 로비에 놓인 물건. 격자가 아니라 실수 좌표에 얹힌다.
+   *
+   * 비어 있으면(작품 층) 아래 계산이 전부 건너뛰어진다.
+   */
+  let lobbyObjects = [];
+
+  /**
+   * 지금 화면에 보이는 물건의 자리들.
+   *
+   * 로비는 축이 작아서(64칸) 화면에 **같은 물건이 여러 번** 보일 수 있다. 순환
+   * 공간이므로 그것이 맞다 — 한 방향으로 걸으면 같은 로고를 다시 만난다.
+   * 그래서 한 물건이 여러 자리를 낸다.
+   *
+   * 그리는 쪽과 누르는 쪽이 **이 함수를 함께 쓴다.** 따로 계산하면 보이는 자리와
+   * 눌리는 자리가 어긋난다.
+   */
+  function lobbyPlacements() {
+    if (lobbyObjects.length === 0) return [];
+
+    const span = Number(axisMask) + 1;
+    // 화면 i=0 이 가리키는 좌표. coordOf 와 같은 규약이다.
+    const baseX = Number(world.baseX & axisMask);
+    const baseY = Number(world.baseY & axisMask);
+
+    const halfW = view.width / 2 / camera.zoom;
+    const halfH = view.height / 2 / camera.zoom;
+    const left = camera.x - halfW;
+    const right = camera.x + halfW;
+    const top = camera.y - halfH;
+    const bottom = camera.y + halfH;
+
+    const placements = [];
+    for (const object of lobbyObjects) {
+      // 물건의 좌표를 화면 칸 번호로. 한 주기 안으로 접어 둔다.
+      let ix = (object.x - baseX) % span;
+      if (ix < 0) ix += span;
+      let iy = (object.y - baseY) % span;
+      if (iy < 0) iy += span;
+
+      const half = object.size / 2;
+      const kFrom = Math.floor((left - ix - half) / span);
+      const kTo = Math.ceil((right - ix + half) / span);
+      const mFrom = Math.floor((top - iy - half) / span);
+      const mTo = Math.ceil((bottom - iy + half) / span);
+
+      for (let k = kFrom; k <= kTo; k++) {
+        for (let m = mFrom; m <= mTo; m++) {
+          placements.push({ object, wx: ix + k * span, wy: iy + m * span });
+        }
+      }
+    }
+    return placements;
+  }
+
+  /** 물건을 바닥 위에 얹는다. 그림이 아직 없는 것은 건너뛴다. */
+  function paintLobbyObjects() {
+    for (const { object, wx, wy } of lobbyPlacements()) {
+      if (!object.bitmap) continue;
+      const [sx, sy] = worldToScreen(camera, wx, wy, view.width, view.height);
+      const side = object.size * camera.zoom;
+      ctx.drawImage(object.bitmap, sx - side / 2, sy - side / 2, side, side);
+    }
+  }
+
+  /**
    * 지금 층의 줌 예산을 카메라에 적용한다.
    *
    * 화면 크기가 바뀔 때와 층이 바뀔 때 둘 다 필요하다. 예산이 어디서 오는지는
@@ -365,6 +430,38 @@ export function createStage({ canvas, camera, tiles, zoomBudgetFor = null, wall 
       velocity = { x: vx, y: vy };
     },
 
+    /**
+     * 로비에 놓인 물건을 준다. 로비가 아니면 빈 배열을 준다.
+     *
+     * 각 물건은 `{ id, kind, x, y, size, bitmap }` 이다. 그림을 준비하는 일은
+     * 부르는 쪽(main)이 한다. stage 는 어디에 어떻게 놓는지만 안다.
+     */
+    setLobbyObjects(list) {
+      lobbyObjects = Array.isArray(list) ? list : [];
+    },
+
+    get lobbyObjects() {
+      return lobbyObjects;
+    },
+
+    /**
+     * 화면 좌표에 있는 로비 물건. 없으면 null.
+     *
+     * 그리는 것과 **같은 배치 계산**을 쓴다. 따로 계산하면 눈에 보이는 자리와
+     * 눌리는 자리가 어긋난다.
+     */
+    lobbyObjectAt(screenX, screenY) {
+      // 위에 그려진 것이 먼저 잡혀야 하므로 뒤에서부터 본다.
+      const placements = lobbyPlacements();
+      for (let index = placements.length - 1; index >= 0; index--) {
+        const { object, wx, wy } = placements[index];
+        const [sx, sy] = worldToScreen(camera, wx, wy, view.width, view.height);
+        const half = (object.size * camera.zoom) / 2;
+        if (Math.abs(screenX - sx) <= half && Math.abs(screenY - sy) <= half) return object;
+      }
+      return null;
+    },
+
     /** 화면 좌표 → 셀 번호. 탭이 어느 전시물인지 알아낸다. */
     cellAt(screenX, screenY) {
       return [
@@ -421,6 +518,12 @@ export function createStage({ canvas, camera, tiles, zoomBudgetFor = null, wall 
           paintCell({ key: keyOf(entry.i, entry.j), i: entry.i, j: entry.j }, entry.value);
         }
       }
+
+      // 2.5 로비의 물건. 바닥 위에 얹는다.
+      //
+      // 작품 층에서는 목록이 비어 있어 아무 일도 하지 않는다. 어둡게 하기(3)
+      // 앞에 두는 이유는, 로비에는 고른 칸이 없어서 어둡게 할 일도 없기 때문이다.
+      paintLobbyObjects();
 
       // 3. 어둡게 하고, 고른 것만 그 위에 다시 찍는다.
       if (dimNow > 0.004 && focus) {

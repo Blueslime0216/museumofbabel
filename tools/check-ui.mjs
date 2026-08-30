@@ -54,8 +54,14 @@ function check(name, ok, detail = '') {
 const browser = await chromium.launch({ channel: 'msedge' });
 const temp = mkdtempSync(join(tmpdir(), 'museum-check-'));
 
-/** 화면 하나를 열고 개방이 끝날 때까지 기다린다. */
-async function openPage(size) {
+/**
+ * 화면 하나를 열고 개방이 끝날 때까지 기다린다.
+ *
+ * 주소 없이 들어오면 **로비**다. 아래 검사 대부분은 작품 층을 전제하므로(전시물을
+ * 누르고 시트를 열고 픽셀을 견준다) 열자마자 작품 층으로 옮긴다. 로비 자체를
+ * 보는 검사만 `lobby: true` 로 열어 그 이동을 건너뛴다.
+ */
+async function openPage(size, { lobby = false } = {}) {
   const page = await browser.newPage(
     size === 'mobile'
       ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
@@ -70,6 +76,16 @@ async function openPage(size) {
 
   await page.goto(target, { waitUntil: 'commit' });
   await page.waitForFunction(() => window.__museum, null, { timeout: 20000 });
+
+  if (!lobby) {
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    await page.evaluate(() => window.__museum.jumpRandom(8));
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+  }
   return page;
 }
 
@@ -1107,6 +1123,11 @@ for (const size of ['mobile', 'desktop']) {
 
   await page.goto(target, { waitUntil: 'commit' });
   await page.waitForFunction(() => window.__museum, null, { timeout: 20000 });
+  // 주소 없이 들어오면 로비다. 여기서는 작품 제목과 시트를 봐야 하므로 옮긴다.
+  await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+    timeout: 30000,
+  });
+  await page.evaluate(() => window.__museum.jumpRandom(8));
   await settled(page);
   await page.waitForTimeout(300);
 
@@ -1592,6 +1613,89 @@ for (const size of ['mobile', 'desktop']) {
   }
 
   check('개방 검사에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
+  await page.close();
+}
+
+// ── 5.8 — 로비는 격자가 아니라 자유 배치다 ───────────────────────────────
+
+{
+  const page = await openPage('desktop', { lobby: true });
+  await settled(page);
+
+  // 주소 없이 들어오면 로비 가운데다
+  {
+    const state = await page.evaluate(() => window.__museum.state);
+    check('주소 없이 들어오면 로비로 온다', state.tier === 0, `층 ${state.tier}`);
+    check('로비의 가운데에서 시작한다', state.x === '32' && state.y === '32', `(${state.x}, ${state.y})`);
+  }
+
+  // 가운데에 표지가 있다
+  {
+    const objects = await page.evaluate(() => window.__museum.lobby);
+    const logo = objects.find(object => object.id === 'logo');
+    check('로비에 물건이 놓여 있다', objects.length > 0, `${objects.length}개`);
+    check('가운데에 표지가 있다', logo !== undefined && logo.x === 32 && logo.y === 32);
+    check('표지의 그림이 실려 있다', logo?.hasImage === true);
+    // 표지만 진짜 이미지다. 나머지는 주소로 그린다.
+    check('표지는 눌러도 아무 일이 없다', logo?.action === null, String(logo?.action));
+  }
+
+  // 물건은 칸에 맞지 않는다. 격자에 맞으면 전시물처럼 보인다.
+  {
+    const sizes = await page.evaluate(() =>
+      window.__museum.lobby.map(object => object.size),
+    );
+    check('물건이 한 칸보다 크다', sizes.every(size => size > 1), sizes.join(' · '));
+  }
+
+  // 화면에 로비가 넓게 보인다. 물건 하나가 화면을 덮으면 장소로 읽히지 않는다.
+  {
+    const view = await page.evaluate(() => {
+      const camera = window.__museum.camera;
+      return { zoom: camera.zoom, cells: window.innerWidth / camera.zoom };
+    });
+    check(
+      '로비가 한 화면에 여러 칸 보인다',
+      view.cells > 14 && view.cells < 64,
+      `${view.cells.toFixed(1)}칸 (줌 ${view.zoom.toFixed(1)})`,
+    );
+  }
+
+  // 순환. 64칸 옆으로 가도 같은 표지가 보인다.
+  {
+    const hit = await page.evaluate(() => {
+      const centre = [window.innerWidth / 2, window.innerHeight / 2];
+      return window.__museum.stage.lobbyObjectAt(centre[0], centre[1])?.id ?? null;
+    });
+    check('가운데를 누르면 표지가 잡힌다', hit === 'logo', String(hit));
+
+    // 카메라 좌표로 64칸 옮긴다. 로비 좌표(32) 로 계산하면 안 된다 — 화면의 칸
+    // 번호는 기준점(baseX)에 대한 상대값이고 로비 좌표와 같지 않다.
+    const camera = await page.evaluate(() => ({
+      x: window.__museum.camera.x,
+      y: window.__museum.camera.y,
+    }));
+    await page.evaluate(
+      ([x, y]) => window.__museum.focusCell(Math.round(x) + 64, Math.round(y)),
+      [camera.x, camera.y],
+    );
+    await page.waitForTimeout(1200);
+    const wrapped = await page.evaluate(() => {
+      const centre = [window.innerWidth / 2, window.innerHeight / 2];
+      return window.__museum.stage.lobbyObjectAt(centre[0], centre[1])?.id ?? null;
+    });
+    check('64칸을 걸으면 같은 표지를 다시 만난다', wrapped === 'logo', String(wrapped));
+  }
+
+  // 로비에서는 작품 시트가 열리지 않는다. 작품이 없으므로 열 것이 없다.
+  {
+    await page.mouse.click(200, 200);
+    await page.waitForTimeout(400);
+    const sheet = await page.evaluate(() => window.__museum.sheet.state);
+    check('로비에서는 작품 시트가 열리지 않는다', sheet === 'hidden', String(sheet));
+  }
+
+  check('로비 검사에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
   await page.close();
 }
 
