@@ -317,6 +317,57 @@
       </div>
     </div>
 
+    <!-- 팜플렛. 미니맵을 누르면 접힌 종이가 펼쳐진다.
+         세 폭인 것은 실제 미술관 팜플렛이 그렇기 때문이고, 펼치는 모션이
+         있으려면 접힌 상태가 있어야 한다. 폭마다 하나의 물음에 답한다:
+         내가 어디 있는가 · 이 미술관은 어떻게 생겼는가 · 로비에 무엇이 있는가 -->
+    <div class="scrim scrim-pamphlet" id="scrim-pamphlet" hidden>
+      <div
+        class="pamphlet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pamphlet-title"
+        id="pamphlet"
+      >
+        <!-- 1폭: 지금 내 자리 -->
+        <section class="fold">
+          <h2 class="fold-title" id="pamphlet-title" data-i18n="pamphlet.here">You are here</h2>
+          <!-- 층 전체를 담은 네모. 내 자리를 점으로 찍는다. 미니맵과 달리
+               내 위치를 가운데 두지 않는다 — 층 안에서의 자리를 보여야 한다. -->
+          <div class="fold-plan" id="pamphlet-plan">
+            <span class="fold-dot" id="pamphlet-dot"></span>
+          </div>
+          <p class="fold-line" id="pamphlet-floor"></p>
+          <p class="fold-note" id="pamphlet-room"></p>
+        </section>
+        <!-- 2폭: 건물 단면도 -->
+        <section class="fold">
+          <h2 class="fold-title" data-i18n="pamphlet.building">The building</h2>
+          <ul class="fold-floors" id="pamphlet-floors"></ul>
+          <p class="fold-note" data-i18n="pamphlet.buildingNote">
+            each floor is a different grain.
+          </p>
+        </section>
+        <!-- 3폭: 로비와 체험관 -->
+        <section class="fold">
+          <h2 class="fold-title" data-i18n="pamphlet.lobby">Ground floor</h2>
+          <p class="fold-note" data-i18n="pamphlet.lobbyNote">
+            the lobby holds the sign, today's pictures and the workshop.
+          </p>
+          <div class="fold-actions">
+            <button class="btn" id="pamphlet-to-lobby" data-i18n="pamphlet.toLobby">
+              To the lobby
+            </button>
+            <button class="btn" id="pamphlet-to-workshop" data-i18n="pamphlet.toWorkshop">
+              To the workshop
+            </button>
+          </div>
+          <div class="fold-actions">
+            <button class="btn" data-close data-i18n="common.close">Close</button>
+          </div>
+        </section>
+      </div>
+    </div>
     <!-- 모달: 언어 -->
     <div class="scrim" id="scrim-language" hidden>
       <div class="modal modal-narrow" role="dialog" aria-modal="true" aria-labelledby="lang-title">

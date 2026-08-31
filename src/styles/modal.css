@@ -532,3 +532,176 @@ body[data-sheet='expanded'] .controls {
   paint-order: stroke fill;
   -webkit-text-stroke: 1.5px var(--edge-modal);
 }
+
+/* ── 팜플렛 ──────────────────────────────────────────────────────────────
+   접힌 종이를 펼치는 모션.
+
+   폭마다 왼쪽 모서리를 축으로 세워 두었다가(rotateY) 눕힌다. 시차를 주면
+   한 장씩 펴지는 것으로 읽힌다 — 세 폭이 동시에 열리면 종이가 아니라 판이다.
+
+   `perspective` 는 부모에 준다. 폭마다 주면 각각 다른 소실점을 가져서 접힌
+   종이가 아니라 세 장의 다른 종이가 된다.
+
+   축은 왼쪽이다. 미니맵이 좌상단에 있으므로 그 자리에서 펴져 나오는 것처럼
+   보인다. 전체도 좌상단을 축으로 조금 커진다. */
+.scrim-pamphlet {
+  /* 다른 모달은 가운데 정렬이지만 팜플렛은 위쪽에 붙는다. 세 폭이 넓어서
+     가운데 정렬하면 작은 화면에서 잘린다. */
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: calc(var(--pad) + var(--safe-t)) var(--pad) calc(var(--pad) + var(--safe-b));
+}
+.pamphlet {
+  display: flex;
+  gap: 10px;
+  perspective: 1500px;
+  transform-origin: top left;
+  /* 펼쳐진 상태. 닫힌 상태는 [hidden] 에서 온다 */
+  transform: scale(1);
+  opacity: 1;
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.25, 1),
+    opacity 180ms ease;
+}
+.fold {
+  width: 218px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--paper, #17140f);
+  border: 1px solid var(--edge-pill);
+  transform-origin: left center;
+  backface-visibility: hidden;
+  transition: transform 420ms cubic-bezier(0.2, 0.75, 0.2, 1);
+}
+/* 펼쳐지는 순서. 왼쪽부터 한 장씩. */
+.fold:nth-child(1) {
+  transition-delay: 0ms;
+}
+.fold:nth-child(2) {
+  transition-delay: 90ms;
+}
+.fold:nth-child(3) {
+  transition-delay: 170ms;
+}
+/* 닫힌 상태를 hidden 이 아니라 클래스로 둔다. hidden 이면 트랜지션이 돌지 않고
+   즉시 사라진다 — 접히는 모습이 안 보인다. 닫기는 js 가 이 클래스를 먼저
+   붙이고, 모션이 끝난 뒤에 hidden 을 준다. */
+.scrim-pamphlet.folded .pamphlet {
+  transform: scale(0.86);
+  opacity: 0;
+}
+.scrim-pamphlet.folded .fold {
+  transform: rotateY(-108deg);
+}
+/* 접힐 때는 오른쪽 폭부터 접힌다. 펼치기의 역순이라 자연스럽다. */
+.scrim-pamphlet.folded .fold:nth-child(1) {
+  transition-delay: 170ms;
+}
+.scrim-pamphlet.folded .fold:nth-child(3) {
+  transition-delay: 0ms;
+}
+.fold-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+/* 층 전체를 담은 네모. 정사각형이어야 두 축의 축척이 같다. */
+.fold-plan {
+  position: relative;
+  aspect-ratio: 1;
+  border: 1px solid var(--edge-pill);
+  border-radius: 4px;
+  /* 층은 순환한다. 끝이 이어져 있다는 것을 결로 알린다. */
+  background:
+    repeating-linear-gradient(0deg, transparent 0 11px, rgba(255, 255, 255, 0.05) 11px 12px),
+    repeating-linear-gradient(90deg, transparent 0 11px, rgba(255, 255, 255, 0.05) 11px 12px);
+}
+.fold-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55);
+}
+.fold-line {
+  margin: 10px 0 2px;
+  font-size: 13px;
+}
+.fold-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  opacity: 0.72;
+  line-height: 1.5;
+}
+.fold-floors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  /* 위층이 위에 오게 뒤집는다. 단면도이므로 목록 순서가 곧 높이다. */
+  flex-direction: column-reverse;
+  gap: 4px;
+}
+.fold-floors button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  font-size: 12px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.fold-floors button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.fold-floors button[aria-current='true'] {
+  border-color: var(--edge-pill);
+  background: rgba(255, 255, 255, 0.14);
+}
+.fold-floors .fold-grid {
+  opacity: 0.6;
+}
+/* 체험관은 로비에 딸린 방이다. 들여쓰기로 그것을 보인다. */
+.fold-floors .fold-inside {
+  margin-left: 14px;
+  width: calc(100% - 14px);
+}
+.fold-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.fold-actions .btn {
+  flex: 1;
+}
+@media (max-width: 760px) {
+  /* 세 폭이 가로로 안 들어간다. 위아래로 접는다 — 접히는 축만 바뀐다. */
+  .pamphlet {
+    flex-direction: column;
+  }
+  .fold {
+    width: min(84vw, 300px);
+    transform-origin: center top;
+  }
+  .scrim-pamphlet.folded .fold {
+    transform: rotateX(108deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 종이가 펄럭이는 것이 어지러운 사람이 있다. 나타나기만 한다. */
+  .pamphlet,
+  .fold {
+    transition-duration: 1ms;
+  }
+  .scrim-pamphlet.folded .fold {
+    transform: none;
+  }
+}

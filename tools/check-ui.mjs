@@ -1859,12 +1859,77 @@ for (const size of ['mobile', 'desktop']) {
       `${floorPixels.colours}가지 색`,
     );
 
-    // 지도는 버튼이다. 팜플렛은 아직 없으므로 그 사실을 알린다.
-    const before = await page.locator('.toast').count();
+  }
+
+  // ── 5.10 팜플렛 ───────────────────────────────────────────────────────
+  //
+  // 지도는 버튼이다. 누르면 접힌 종이가 펼쳐진다. 모션은 눈으로 봐야 하지만,
+  // **접히는 단계를 거쳐서 사라지는지**는 여기서 볼 수 있다 — 그것을 건너뛰면
+  // 모션이 아예 없는 것이고, 실제로 hidden 을 먼저 주면 그렇게 된다.
+  {
     await page.locator('#minimap').click();
-    await page.waitForTimeout(600);
-    const after = await page.locator('.toast').count();
-    check('미니맵을 누르면 알림이 뜬다', after > before, `토스트 ${before} → ${after}`);
+    await page.waitForTimeout(700);
+
+    const open = await page.evaluate(() => window.__museum.pamphlet);
+    check('미니맵을 누르면 팜플렛이 펼쳐진다', open.state === 'open', open.state);
+
+    const folds = await page.locator('#pamphlet .fold').count();
+    check('팜플렛이 세 폭이다', folds === 3, `${folds}폭`);
+
+    // 점은 층 전체를 담은 네모 안의 비율이다. 가운데(50%)에 고정돼 있으면
+    // 미니맵을 그대로 옮겨 온 것이고, 층 안의 자리를 말하지 못한다.
+    const left = Number.parseFloat(open.dot.left);
+    const top = Number.parseFloat(open.dot.top);
+    check(
+      '지금 자리가 층 안의 비율로 찍힌다',
+      Number.isFinite(left) && Number.isFinite(top) && left >= 0 && left <= 100 && top >= 0 && top <= 100,
+      `${open.dot.left} / ${open.dot.top}`,
+    );
+
+    // 로비 + 작품 층 4개 + 체험관.
+    check('단면도에 층 다섯과 체험관이 있다', open.floors.length === 6, `${open.floors.length}칸`);
+    check(
+      '체험관은 로비에 딸린 방으로 표시된다',
+      open.floors.filter(floor => floor.workshop).length === 1,
+    );
+    const current = open.floors.find(floor => floor.current);
+    check('지금 층이 단면도에 표시된다', current?.tier === '8', JSON.stringify(current));
+
+    // 다른 층을 누르면 그 층의 무작위 자리로 간다.
+    await page.locator('#pamphlet-floors button[data-tier="32"]').click();
+    await traveled(page);
+    const moved = await page.evaluate(() => ({
+      tier: window.__museum.state.tier,
+      pamphlet: window.__museum.pamphlet.state,
+    }));
+    check('팜플렛에서 층을 고르면 그 층으로 간다', moved.tier === 32, String(moved.tier));
+    check('층을 고르면 팜플렛이 접힌다', moved.pamphlet === 'hidden', moved.pamphlet);
+
+    // 체험관으로. 로비에 딸린 방이므로 층은 0이 된다.
+    await page.locator('#minimap').click();
+    await page.waitForTimeout(700);
+    await page.locator('#pamphlet-to-workshop').click();
+    await traveled(page);
+    const workshop = await page.evaluate(() => ({
+      tier: window.__museum.state.tier,
+      workshop: window.__museum.state.workshop,
+    }));
+    check(
+      '팜플렛에서 체험관으로 갈 수 있다',
+      workshop.tier === 0 && workshop.workshop === true,
+      JSON.stringify(workshop),
+    );
+
+    // 접히는 단계를 거쳐서 사라진다. 곧바로 hidden 이면 모션이 없다.
+    await page.locator('#minimap').click();
+    await page.waitForTimeout(700);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(60);
+    const folding = await page.evaluate(() => window.__museum.pamphlet.state);
+    check('닫을 때 접히는 모습을 거친다', folding === 'folding', folding);
+    await page.waitForTimeout(700);
+    const closed = await page.evaluate(() => window.__museum.pamphlet.state);
+    check('접힘이 끝나면 사라진다', closed === 'hidden', closed);
   }
 
   check('로비 검사에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));

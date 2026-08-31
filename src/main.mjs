@@ -41,6 +41,8 @@ import { createSearch } from './ui/search.mjs';
 import { createLanguagePicker } from './ui/language.mjs';
 import { createFloorPicker } from './ui/floor.mjs';
 import { createMinimap } from './ui/minimap.mjs';
+import { createPamphlet } from './ui/pamphlet.mjs';
+import { LOBBY_TIER } from './codec.mjs';
 import { applyStaticText, onLanguageChange, t } from './i18n/index.mjs';
 import { attachDebug } from './ui/debug.mjs';
 
@@ -152,13 +154,34 @@ const languagePicker = createLanguagePicker({
   onChange: () => {
     sheet.refresh();
     floorPicker.refresh();
+    pamphlet.refresh();
   },
+});
+
+/**
+ * 팜플렛. 미니맵을 누르면 펼쳐진다.
+ *
+ * 자리를 물어보는 함수를 넘긴다(getSpot). 팜플렛이 열릴 때의 자리여야 하므로
+ * 값을 미리 주면 안 된다 — 열고 닫는 사이에 걸어 다닌다.
+ */
+const pamphlet = createPamphlet({
+  getSpot: () => ({
+    tier: state.tier,
+    locality: state.locality,
+    // 중앙 칸의 좌표. state 의 좌표는 층에 들어온 순간의 것이다.
+    x: mapSpot?.x ?? state.x,
+    y: mapSpot?.y ?? state.y,
+    workshop: Boolean(state.workshop),
+  }),
+  // 층을 고르면 그 층의 무작위 자리로. 층 모달과 같은 규칙이다.
+  onGoFloor: tier => jumpRandom(tier),
+  onGoLobby: () => goto({ tier: LOBBY_TIER, ...lobbyHome(), workshop: false }),
+  onGoWorkshop: () => goto({ tier: LOBBY_TIER, ...lobbyHome(), workshop: true }),
 });
 
 const minimap = createMinimap({
   button: document.getElementById('minimap'),
-  // 팜플렛은 다음 작업이다. 그때 이 한 줄이 팜플렛 펼치기로 바뀐다.
-  onOpen: () => toast(t('toast.pamphletSoon')),
+  onOpen: () => pamphlet.toggle(),
 });
 
 let wantedForSheet = null;
@@ -751,6 +774,20 @@ Object.assign(window, {
     /** 미니맵. 화면 검사가 갱신이 도는지와 캐시가 사는지를 본다. */
     get minimap() {
       return minimap.stats;
+    },
+    /** 팜플렛. 열림 상태와 점의 자리를 화면 검사가 본다. */
+    get pamphlet() {
+      const dot = document.getElementById('pamphlet-dot');
+      return {
+        state: pamphlet.state,
+        dot: { left: dot.style.left, top: dot.style.top },
+        floors: [...document.querySelectorAll('#pamphlet-floors button')].map(button => ({
+          tier: button.dataset.tier ?? null,
+          workshop: button.dataset.workshop === '1',
+          current: button.getAttribute('aria-current') === 'true',
+          text: button.textContent,
+        })),
+      };
     },
     get curtain() {
       return {
