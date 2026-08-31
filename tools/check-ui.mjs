@@ -1719,6 +1719,7 @@ for (const size of ['mobile', 'desktop']) {
     const inside = await page.evaluate(() => ({
       workshop: window.__museum.state.workshop,
       tier: window.__museum.state.tier,
+      path: location.pathname,
       search: location.search,
       ids: window.__museum.lobby.map(object => object.id),
       images: window.__museum.lobby.every(object => object.hasImage),
@@ -1727,10 +1728,12 @@ for (const size of ['mobile', 'desktop']) {
     // 체험관은 로비와 같은 층이다. "로비에 있는 방" 이라는 설정이 이것이다.
     check('체험관도 로비와 같은 층이다', inside.tier === 0, String(inside.tier));
     check(
-      '체험관이 주소에 w=1 로 남는다',
-      /[?&]w=1(?:&|$)/.test(inside.search),
-      inside.search,
+      '체험관이 주소의 경로로 남는다',
+      inside.path === '/workshop',
+      `${inside.path}${inside.search}`,
     );
+    // 방은 경로가, 그 방의 자리는 쿼리가 맡는다.
+    check('체험관에서도 좌표가 쿼리에 있다', /[?&]a=/.test(inside.search), inside.search);
     check(
       '체험관에는 QR 포털과 나가는 문이 있다',
       inside.ids.length === 2 && inside.ids.includes('qr') && inside.ids.includes('exit'),
@@ -1765,11 +1768,12 @@ for (const size of ['mobile', 'desktop']) {
     await traveled(page);
     const back = await page.evaluate(() => ({
       workshop: window.__museum.state.workshop,
+      path: location.pathname,
       search: location.search,
       logo: window.__museum.lobby.some(object => object.kind === 'logo'),
     }));
     check('나가는 문으로 로비에 돌아온다', back.workshop === false, String(back.workshop));
-    check('로비로 돌아오면 주소에서 w 가 빠진다', !/[?&]w=/.test(back.search), back.search);
+    check('로비로 돌아오면 경로가 /lobby 다', back.path === '/lobby', back.path);
     check('로비로 돌아오면 표지가 다시 있다', back.logo === true);
   }
 
@@ -2066,6 +2070,38 @@ for (const size of ['mobile', 'desktop']) {
     );
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
+  }
+
+  // ── 5.14 경로로 바로 들어오기 ─────────────────────────────────────────
+  //
+  // 링크를 받은 사람이 처음 보는 화면이다. 서버가 그 경로에서 index.html 을
+  // 돌려주고(vercel.json 의 rewrites), 앱이 경로를 읽어 방을 가른다.
+  {
+    for (const [room, path, workshop] of [
+      ['체험관', '/workshop', true],
+      ['로비', '/lobby', false],
+    ]) {
+      await page.goto(new URL(path, target).href, { waitUntil: 'commit' });
+      await page.waitForFunction(() => window.__museum, null, { timeout: 20000 });
+      await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+        timeout: 30000,
+      });
+      const state = await page.evaluate(() => window.__museum.state);
+      check(
+        `${path} 로 바로 들어가면 ${room}이다`,
+        state.tier === 0 && Boolean(state.workshop) === workshop,
+        `층 ${state.tier} · 체험관 ${state.workshop}`,
+      );
+    }
+
+    // 작품 층은 경로를 쓰지 않는다. 이미 나간 링크가 모두 그 모양이다.
+    await page.evaluate(() => window.__museum.jumpRandom(8));
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    await page.waitForTimeout(700);
+    const gallery = await page.evaluate(() => location.pathname + location.search);
+    check('작품 층은 경로가 뿌리다', gallery.startsWith('/?a='), gallery.slice(0, 24));
   }
 
   check('로비 검사에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));

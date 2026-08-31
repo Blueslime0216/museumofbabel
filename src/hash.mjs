@@ -42,28 +42,47 @@ export const PARAM = 'a';
 
 
 /**
- * 체험관에 있는지 나타내는 쿼리. 값이 `1` 이면 체험관이다.
+ * 방마다의 경로. 작품이 없는 층만 자기 경로를 가진다.
  *
- * ── 왜 층이 아니라 쿼리인가 ──────────────────────────────────────────────
+ * ── 왜 층이 아니라 경로인가 ──────────────────────────────────────────────
  *
  * 체험관은 "로비에 있는 방" 이라는 설정이므로 로비와 같은 층(0)을 쓴다. 그래서
- * 좌표만으로는 로비와 구분되지 않고, 어딘가에 한 비트가 더 필요하다.
+ * 좌표만으로는 로비와 구분되지 않고, 어딘가에 한 조각이 더 필요하다.
  *
  * 주소 안에 넣지 않는다. 층 색인은 `ADDRESSABLE_TIERS` 의 순서이고, 거기에 값을
  * 끼우면 **이미 나간 모든 주소가 다른 층을 가리킨다.** 끝에 붙이면 색인은
  * 보존되지만 그때는 코덱을 고치고 다시 동기화해야 한다. 얻는 것에 비해 비싸다.
  *
- * 작품 주소의 순수성을 해치지도 않는다. 이 쿼리는 **작품이 없는 층에서만** 뜻이
- * 있고, 작품 층 주소에는 아예 붙지 않는다. 로비가 이미 작품 공간 밖이라는 사실의
- * 연장이다.
+ * 처음에는 쿼리(`&w=1`)로 두었다. 경로로 옮긴 이유는 읽는 사람 때문이다.
+ * `museumofbabel.org/lobby` 는 어디로 가는 링크인지 보이고, `?a=C7…&w=1` 은
+ * 보이지 않는다. 방은 장소의 이름이므로 경로가 그것의 자리다.
+ *
+ * 작품 층은 경로를 쓰지 않는다(`/`). 작품의 자리는 이름이 아니라 좌표이고,
+ * 이미 나간 모든 링크가 그 모양이다.
+ *
+ * 좌표는 경로가 아니라 여전히 `?a=` 다. 경로가 "어느 방" 을, 쿼리가 "그 방의
+ * 어디" 를 맡는다.
  */
-export const PARAM_WORKSHOP = 'w';
+export const ROOM_PATHS = { lobby: '/lobby', workshop: '/workshop' };
 
-/** 상태 → 주소창에 넣을 문자열. `?a=…` 형태다. */
+/** 옛 링크에 있던 쿼리. 만들지는 않고 읽어만 준다. */
+const PARAM_WORKSHOP = 'w';
+
+/** 상태 → 경로. 작품 층은 뿌리다. */
+export function pathFor(state) {
+  if (!isLobbyTier(state.tier)) return '/';
+  return state.workshop ? ROOM_PATHS.workshop : ROOM_PATHS.lobby;
+}
+
+/** 상태 → 주소창에 넣을 쿼리. `?a=…` 형태다. */
 export function queryFor(state) {
   // 주소는 영숫자뿐이라(base62) 인코딩할 것이 없다. 그래도 규칙은 지킨다.
-  const address = `?${PARAM}=${encodeURIComponent(formatHash(state).slice(1))}`;
-  return state.workshop ? `${address}&${PARAM_WORKSHOP}=1` : address;
+  return `?${PARAM}=${encodeURIComponent(formatHash(state).slice(1))}`;
+}
+
+/** 상태 → 주소창 전체(경로 + 쿼리). */
+export function urlFor(state) {
+  return `${pathFor(state)}${queryFor(state)}`;
 }
 
 /**
@@ -104,7 +123,7 @@ function sameSpot(a, b) {
 
 /** 남에게 줄 전체 링크. 이것이 카드에 그림을 띄우는 형태다. */
 export function shareUrlFor(state) {
-  return `${location.origin}${location.pathname}${queryFor(state)}`;
+  return `${location.origin}${urlFor(state)}`;
 }
 
 /**
@@ -145,23 +164,44 @@ export function readLegacyHash() {
  * 첫 이동에서 `set` 이 알아서 한다 (`commit` 이 해시를 남기지 않는다).
  */
 /**
- * 체험관 쿼리를 상태에 얹는다.
+ * 주소창의 경로가 가리키는 방. 없으면 null.
  *
- * **작품 층에서는 무시한다.** 작품 층에 `?w=1` 이 붙은 주소는 뜻이 없고, 그것을
- * 살려 두면 "체험관에 걸린 층 16 작품" 같은 있을 수 없는 상태가 생긴다. 로비
- * 층에서만 방을 가른다.
+ * 끝의 슬래시는 무시한다. `cleanUrls` 를 쓰므로 `/lobby` 와 `/lobby/` 가 같은
+ * 곳이어야 하고, 사람이 손으로 적을 때 둘 다 나온다.
  */
-function withWorkshop(state) {
+function roomInPath() {
+  const path = location.pathname.replace(/\/+$/, '');
+  if (path.endsWith(ROOM_PATHS.workshop)) return 'workshop';
+  if (path.endsWith(ROOM_PATHS.lobby)) return 'lobby';
+  return null;
+}
+
+/**
+ * 경로가 말하는 방을 상태에 얹는다.
+ *
+ * **작품 층에서는 무시한다.** 작품 층 주소에 `/workshop` 을 붙인 링크는 뜻이 없고,
+ * 그것을 살려 두면 "체험관에 걸린 층 16 작품" 같은 있을 수 없는 상태가 생긴다.
+ * 로비 층에서만 방을 가른다.
+ *
+ * 옛 `&w=1` 도 읽어 준다. 만들지는 않는다 — `#` 을 받아 주는 것과 같은 규칙이다.
+ */
+function withRoom(state) {
   if (!isLobbyTier(state.tier)) return state;
-  const flag = new URLSearchParams(location.search).get(PARAM_WORKSHOP);
-  return flag === '1' ? { ...state, workshop: true } : state;
+  const room = roomInPath();
+  if (room === 'workshop') return { ...state, workshop: true };
+  if (room === 'lobby') return { ...state, workshop: false };
+  const legacy = new URLSearchParams(location.search).get(PARAM_WORKSHOP);
+  return legacy === '1' ? { ...state, workshop: true } : state;
 }
 
 export function readState() {
+  // **모든 갈래가 경로를 거친다.** 좌표가 없는 링크(`/workshop` 하나만 적은 것)가
+  // 가장 흔한 형태이므로, 좌표를 읽은 갈래에만 방을 얹으면 그 링크가 로비로
+  // 떨어진다. 실제로 그렇게 만들었다가 검사에서 잡혔다.
   const query = new URLSearchParams(location.search).get(PARAM);
   if (query) {
     try {
-      return withWorkshop({
+      return withRoom({
         ...parseHash(`#${query.replace(/^#/, '')}`, axisBitsFor),
         fromUrl: true,
       });
@@ -169,15 +209,15 @@ export function readState() {
       // 남이 준 깨진 주소다. 조용히 무시하지 않고 호출한 쪽이 알린다.
       // 입구로 돌려보낸다 — 무작위 좌표에 던지면 알림을 읽는 동안에도
       // 자기가 어디 있는지 모른다.
-      return lobbyState({ fromUrl: false, broken: true });
+      return withRoom(lobbyState({ fromUrl: false, broken: true }));
     }
   }
 
   if (location.hash.length > 1) {
     try {
-      return { ...parseHash(location.hash, axisBitsFor), fromUrl: true, legacy: true };
+      return withRoom({ ...parseHash(location.hash, axisBitsFor), fromUrl: true, legacy: true });
     } catch {
-      return lobbyState({ fromUrl: false, broken: true, legacy: true });
+      return withRoom(lobbyState({ fromUrl: false, broken: true, legacy: true }));
     }
   }
 
@@ -186,7 +226,9 @@ export function readState() {
   // 예전에는 무작위 좌표였다. 그러면 처음 온 사람이 아무 설명 없이 낯선 그림
   // 한가운데에 떨어진다. 여기가 무엇인지, 무엇을 할 수 있는지 알 방법이 없다.
   // 로비 가운데에는 이 미술관의 표지가 있고, 거기서부터 걸어 나가면 된다.
-  return lobbyState({ fromUrl: false });
+  //
+  // 경로가 `/workshop` 이면 체험관 가운데다. 좌표 없이 방만 적은 링크가 그것이다.
+  return withRoom(lobbyState({ fromUrl: false }));
 }
 
 export function createHashWriter() {
@@ -198,11 +240,12 @@ export function createHashWriter() {
 
   // 주소를 만드는 것은 여기 한 곳뿐이다. 그래서 최악의 경우에도 500ms 에 한 번이다.
   function commit(spot) {
-    last = queryFor(spot);
+    last = urlFor(spot);
     lastSpot = spot;
     lastAt = performance.now();
     // 해시는 남기지 않는다. 옛 링크로 들어왔다면 이 호출이 그것을 지운다.
-    history.replaceState(null, '', `${location.pathname}${last}`);
+    // 경로까지 함께 쓴다. 방을 옮기면 경로가 바뀌기 때문이다(`/lobby` ↔ `/workshop`).
+    history.replaceState(null, '', last);
   }
 
   return {

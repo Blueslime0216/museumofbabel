@@ -662,6 +662,52 @@ window.addEventListener('hashchange', () => {
   goto(next); // goto 안의 hash.set 이 해시를 지우고 ?a= 로 바꾼다
 });
 
+/**
+ * 뒤로 · 앞으로.
+ *
+ * 우리는 `replaceState` 만 쓰므로 관람 중에 항목이 쌓이지는 않는다. 그런데 새 탭이
+ * 아닌 같은 탭에서 링크를 눌러 들어오거나(Ctrl 없이 누른 로비의 그림) 브라우저가
+ * 되돌려 놓으면, 주소창은 옛 자리를 가리키는데 화면은 그대로 남는다. 그때 주소를
+ * 다시 읽어 그 자리로 간다.
+ */
+window.addEventListener('popstate', () => {
+  const next = readState();
+  const same =
+    next.tier === state.tier &&
+    next.locality === state.locality &&
+    next.x === state.x &&
+    next.y === state.y &&
+    Boolean(next.workshop) === Boolean(state.workshop);
+  if (same) return;
+  goto(next);
+});
+
+/**
+ * 뒤로 가기로 이 페이지가 **되살아났을 때**(bfcache).
+ *
+ * 브라우저는 페이지를 얼려 두었다가 그대로 되살린다. 그런데 얼어 있는 동안
+ * 캔버스의 픽셀을 놓아 버리는 경우가 있고, 그러면 미니맵이 빈 칸으로 돌아온다.
+ * 지도는 "같은 그림이면 다시 그리지 않는다" 로 값을 아끼므로, 아무도 다시
+ * 그려 달라고 하지 않는다. 그 증상이 "뒤로 가기를 누르면 지도가 안 뜬다" 였다.
+ *
+ * 되살아났으면 크기를 다시 재고 지도와 화면을 다시 그리게 한다.
+ */
+window.addEventListener('pageshow', event => {
+  if (!event.persisted) return;
+  minimap.resize();
+  mapDirty = true;
+  dirty = true;
+});
+
+// 탭을 다시 보게 되었을 때도 같은 이유로 한 번 다시 그린다. 얼려 두는 동안
+// 캔버스를 비우는 브라우저가 있다.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  minimap.resize();
+  mapDirty = true;
+  dirty = true;
+});
+
 // ── 프레임 루프 ──────────────────────────────────────────────────────────
 
 let last = performance.now();

@@ -15,7 +15,7 @@
 //   파비콘은 이름이 그대로이므로 cache-first 에 걸려 옛 것이 영원히 남는다.
 //   실제로 아이콘을 갈아 끼우면서 이 함정을 확인했다.
 
-const VERSION = 'v3';
+const VERSION = 'v4'; // 문서 캐시 열쇠가 경로 → 하나로 바뀌었다
 const CACHE = `museum-of-babel-${VERSION}`;
 
 self.addEventListener('install', () => {
@@ -50,7 +50,15 @@ async function cacheFirst(request) {
  * 어느 좌표로 들어와도 똑같은 한 장이다. 요청을 그대로 키로 쓰면 관람한 작품
  * 수만큼 같은 10KB 가 쌓인다. 예전에는 좌표가 `#` 에 있어서 URL 이 하나였다.
  */
-const pageKey = request => new URL(request.url).pathname;
+/**
+ * 문서는 **하나의 열쇠**로 저장한다. 경로도 키에 넣지 않는다.
+ *
+ * `/` · `/lobby` · `/workshop` 이 모두 같은 index.html 을 돌려준다(vercel.json 의
+ * rewrites). 경로를 키로 쓰면 같은 10KB 가 세 번 쌓이고, 더 나쁜 것은 오프라인
+ * 에서 아직 안 가 본 경로가 열리지 않는다는 것이다. 방은 클라이언트가 경로를
+ * 읽어서 가르므로, 문서 자체는 한 장이면 된다.
+ */
+const pageKey = () => '/';
 
 async function networkFirst(request) {
   const cache = await caches.open(CACHE);
