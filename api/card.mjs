@@ -61,6 +61,9 @@ export default function handler(request, response) {
 <meta property="og:description" content="${escape(DESCRIPTION)}" />
 <meta property="og:url" content="${escape(page)}" />
 <meta property="og:image" content="${escape(image)}" />
+<!-- 카카오톡과 몇몇 곳은 secure_url 을 먼저 본다. 같은 주소를 한 번 더 적어 준다.
+     https 뿐이라 다른 값이 될 일이 없다. -->
+<meta property="og:image:secure_url" content="${escape(image)}" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="${CARD_SIZE}" />
 <meta property="og:image:height" content="${CARD_SIZE}" />

@@ -215,11 +215,26 @@ async function call(handler, ...args) {
         'Mozilla/5.0 (compatible; LinkedInBot/1.0)',
         'Iframely/1.3.1',
         'Embedly +1.0',
+        // 아래는 뒤에 넣은 것들이다. 한국에서 실제로 쓰이는 곳이 먼저다.
+        'Mozilla/5.0 (compatible; Yeti/1.1; +https://naver.me/spd)', // 네이버
+        'Mozilla/5.0 (compatible; Daum/4.1; +http://cs.daum.net/faq/15/4118.html)',
+        'Mozilla/5.0 (compatible; LINE/1.0; line-poker/1.0)',
+        'Mozilla/5.0 (compatible; Pinterestbot/1.0)',
+        'Mozilla/5.0 (compatible; Mastodon/4.2)',
+        'SkypeUriPreview Preview/0.5',
+        'Mozilla/5.0 (compatible; vkShare; +http://vk.com/dev/Share)',
+        'Viber/1.0',
+        'Signal/1.0',
+        'Snapchat/12.0 (Link Preview)',
       ];
       const shouldNot = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
+        // 앱 안의 브라우저는 **사람**이다. 이름에 회사가 붙어 있어도 잡으면 안 된다.
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 300.0.0.0',
+        'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36 KAKAOTALK/25.0.0',
+        'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.0.0 Mobile Safari/537.36 NAVER(inapp; search; 2000; 12.0.0)',
       ];
       const missed = shouldMatch.filter(ua => !test.test(ua));
       const caught = shouldNot.filter(ua => test.test(ua));
@@ -330,6 +345,12 @@ const ADDRESS = formatHash({ tier: 8, locality: 4, x: fromBase36('abc'), y: from
     /og:image:width" content="1024"/.test(html) && /og:image:height" content="1024"/.test(html),
   );
   check('카드: 사람은 미술관으로 보낸다', /http-equiv="refresh"/.test(html) && /<a href=/.test(html));
+  // 카카오톡 등은 secure_url 을 먼저 본다. 같은 주소여야 한다 — 다르면 어떤 곳은
+  // 이 그림을, 어떤 곳은 저 그림을 보여 준다.
+  {
+    const secure = /<meta property="og:image:secure_url" content="([^"]+)"/.exec(html)?.[1];
+    check('카드: og:image:secure_url 이 같은 그림이다', secure === image, secure ?? '없다');
+  }
   check('카드: 스크립트가 없다', !/<script/i.test(html));
 
   // 주소에 따옴표를 섞어 넣으려 해도 태그가 깨지지 않는다.

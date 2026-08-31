@@ -74,7 +74,7 @@ npm run preview    # serve the build on :4173
 ```powershell
 npm test           # 158 unit tests
 npm run check      # tests + function checks + codec hash verification
-npm run check-api  # 45 checks; calls the serverless handlers directly
+npm run check-api  # 46 checks; calls the serverless handlers directly
 npm run check-ui   # 249 checks; needs `npm run preview` running first
 ```
 

@@ -11,7 +11,7 @@
         {
           "type": "header",
           "key": "user-agent",
-          "value": ".*([Bb]ot|[Cc]rawler|[Ss]pider|[Dd]iscord|[Ss]lack|[Tt]elegram|facebookexternalhit|[Ww]hats[Aa]pp|[Kk]akao|[Ee]mbedly|[Ii]framely|[Pp]review|[Uu]nfurl|[Oo]pen[Gg]raph).*"
+          "value": ".*([Bb]ot|[Cc]rawler|[Ss]pider|[Dd]iscord|[Ss]lack|[Tt]elegram|facebookexternalhit|[Ww]hats[Aa]pp|[Kk]akao|[Ee]mbedly|[Ii]framely|[Pp]review|[Uu]nfurl|[Oo]pen[Gg]raph|Yeti|Daum|line-poker|[Pp]interest|Mastodon|Signal|Skype|Viber|vkShare|Snapchat|TelegramBot).*"
         }
       ],
       "destination": "/api/card",
