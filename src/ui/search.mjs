@@ -100,6 +100,12 @@ export function createSearch({ toast, onGo, getWorld }) {
   const floorRow = $('search-floor-row');
   const roomRow = $('search-room-row');
   const roomName = $('search-room-name');
+  const kept = $('search-kept');
+  const keptName = $('search-kept-name');
+  const againButton = $('search-again');
+
+  /** 올린 그림의 이름. 남아 있다는 것을 알릴 때 쓴다. */
+  let pictureName = '';
 
   /** 어느 층에서 찾을지. 열 때 지금 층으로 맞춘다. */
   let searchTier = getWorld().tier;
@@ -286,14 +292,36 @@ export function createSearch({ toast, onGo, getWorld }) {
     bitmap.close?.();
   }
 
+  /**
+   * 올린 그림을 아직 들고 있다는 것을 알린다.
+   *
+   * 그림은 모달을 닫아도 버리지 않는다(reset 참조). 그런데 아무 표시가 없으면
+   * 다시 열었을 때 빈 화면으로 보이고, 층을 눌러 봐야 그림이 남아 있었다는 것을
+   * 알게 된다. 그래서 남아 있다고 적고, 같은 조건에서 다시 찾을 단추도 둔다.
+   */
+  function renderKept() {
+    if (!picture) {
+      kept.hidden = true;
+      return;
+    }
+    kept.hidden = false;
+    keptName.textContent = t('search.kept', { name: pictureName || t('search.upload') });
+  }
+
   function reset() {
     input.value = '';
     file.value = '';
     compare.hidden = true;
     found = null;
-    picture = null;
     stopWaiting();
     goButton.textContent = t('common.go');
+    // **올린 그림은 지우지 않는다.**
+    //
+    // 예전에는 여기서 버렸다. 그러면 찾아서 이동한 뒤에 다시 열었을 때 그림이
+    // 사라져 있고, 층이나 전시실을 바꿔 보려면 같은 파일을 다시 올려야 했다.
+    // "같은 그림이 층마다 어디에 있나" 를 견주는 것이 이 기능의 쓸모인데, 그
+    // 비교가 파일 고르기로 끊겼다.
+    renderKept();
   }
 
   function open() {
@@ -334,6 +362,8 @@ export function createSearch({ toast, onGo, getWorld }) {
     }
 
     picture = blob;
+    pictureName = blob.name || pictureName;
+    renderKept();
     busy = true;
     dropzone.dataset.busy = '1';
     compare.hidden = true;
@@ -384,6 +414,12 @@ export function createSearch({ toast, onGo, getWorld }) {
 
   dropzone.addEventListener('click', () => file.click());
   file.addEventListener('change', () => accept(file.files?.[0]));
+
+  // 같은 조건에서 다시 찾는다. 층·전시실을 누르면 알아서 다시 찾지만, 같은 것을
+  // 다시 누르는 것은 아무 일도 아니므로(같은 값이면 되돌아간다) 이 단추가 필요하다.
+  againButton.addEventListener('click', () => {
+    if (picture) project(picture);
+  });
 
   // 드래그&드롭. PC 에서만 쓰이지만 막아 둘 이유가 없다.
   for (const name of ['dragenter', 'dragover']) {

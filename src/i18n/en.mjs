@@ -40,6 +40,8 @@ export default {
   "sheet.palette": "Palette",
 
   "search.title": "Find an artwork",
+  "search.kept": "Your picture: {name} - changing floor or room searches with it again",
+  "search.again": "Search again with it",
   "search.upload": "Upload a picture",
   "search.uploadNote": "we walk to the nearest address",
   "search.floor": "Floor",

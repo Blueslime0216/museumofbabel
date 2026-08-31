@@ -1036,6 +1036,34 @@ for (const size of ['mobile', 'desktop']) {
     `tier ${await page.evaluate(() => window.__museum.state.tier)}`,
   );
 
+  // 이동한 뒤에 다시 열어도 올린 그림이 남아 있다.
+  //
+  // 예전에는 여기서 그림이 버려졌다. 그래서 "같은 그림이 층마다 어디에 있나" 를
+  // 견주려면 층을 바꿀 때마다 파일을 다시 골라야 했다.
+  {
+    await page.click('#btn-search');
+    await page.waitForTimeout(250);
+    const keptShown = await page.isVisible('#search-kept');
+    const keptText = await page.textContent('#search-kept-name');
+    check('이동한 뒤에도 올린 그림이 남아 있다', keptShown, keptText?.trim() || '표시 없음');
+    check('남은 그림의 이름을 알려 준다', (keptText ?? '').includes('.png'), keptText?.trim() ?? '');
+
+    // 전시실을 바꾸면 그 그림으로 다시 찾는다. 파일을 다시 고르지 않는다.
+    await page.click('#compare');
+    await page.click('#search-room-row .segment[data-room="3"]');
+    await page.waitForSelector('#compare:not([hidden])', { timeout: 60000 });
+    check('다시 올리지 않아도 다른 전시실에서 다시 찾는다', await page.isVisible('#compare'));
+
+    // 같은 조건에서 다시 찾는 단추도 있다. 같은 칸을 다시 누르는 것은 아무 일도
+    // 아니기 때문이다.
+    check('이 그림으로 다시 찾는 단추가 있다', await page.isVisible('#search-again'));
+    await page.click('#search-again');
+    await page.waitForSelector('#compare:not([hidden])', { timeout: 60000 });
+    check('그 단추로 다시 찾는다', await page.isVisible('#compare'));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+  }
+
   // 전시실을 골라서 찾으면 **정말로** 그 방 안의 자리를 준다.
   //
   // 여기가 이 기능의 알맹이다. room 을 워커까지 못 넘기면 아무 말 없이 무시되고

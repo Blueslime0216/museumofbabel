@@ -44,6 +44,8 @@ export default {
   "sheet.palette": "Цвет",
 
   "search.title": "Найти работу",
+  "search.kept": "Ваша картина: {name} — при смене этажа или зала поиск повторится с ней",
+  "search.again": "Искать снова с ней",
   "search.upload": "Загрузить картину",
   "search.uploadNote": "мы дойдём до ближайшего адреса",
   "search.floor": "Этаж",

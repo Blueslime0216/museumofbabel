@@ -43,6 +43,8 @@ export default {
   "search.floor": "층",
   // 전시실은 번호로만 고른다. 딸림표도 같은 번호를 보여 준다.
   "search.room": "전시실",
+  "search.kept": "올린 그림: {name} · 층이나 전시실을 바꾸면 이 그림으로 다시 찾습니다",
+  "search.again": "이 그림으로 다시 찾기",
   "search.upload": "그림 올리기",
   "search.uploadNote": "가장 닮은 자리를 찾아갑니다",
   "search.or": "또는",

@@ -43,6 +43,8 @@ export default {
   "sheet.palette": "色",
 
   "search.title": "作品を探す",
+  "search.kept": "アップロードした絵: {name} · 階や展示室を変えるとこの絵で探し直します",
+  "search.again": "この絵でもう一度探す",
   "search.upload": "絵をアップロード",
   "search.uploadNote": "いちばん近い場所まで歩きます",
   "search.floor": "階",

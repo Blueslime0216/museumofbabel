@@ -296,6 +296,18 @@
           터지고, 이름이 필요한 순간은 "지금 어느 방을 골랐나" 하나뿐이다.
         -->
         <p class="chosen-room" id="search-room-name"></p>
+        <!--
+          올린 그림이 남아 있다는 표시. 모달을 닫아도 그림은 남으므로, 다시 열었을
+          때 그것을 알려야 한다. 층·전시실을 바꾸면 이 그림으로 다시 찾는다.
+        -->
+        <div class="kept" id="search-kept" hidden>
+          <p class="modal-note" id="search-kept-name"></p>
+          <div class="modal-actions">
+            <button class="btn" id="search-again" data-i18n="search.again">
+              Search again with it
+            </button>
+          </div>
+        </div>
 
         <button class="dropzone" id="dropzone" data-busy="0" data-over="0">
           <svg viewBox="0 0 24 24" aria-hidden="true">

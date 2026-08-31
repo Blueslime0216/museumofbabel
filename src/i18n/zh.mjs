@@ -44,6 +44,8 @@ export default {
   "sheet.palette": "色",
 
   "search.title": "寻找作品",
+  "search.kept": "已上传的画：{name} · 换层或换展厅会用它重新查找",
+  "search.again": "用这张画重新查找",
   "search.upload": "上传画作",
   "search.uploadNote": "带你走到最相近的位置",
   "search.floor": "层",

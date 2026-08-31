@@ -845,3 +845,14 @@ body[data-sheet='expanded'] .controls {
   outline: 3px solid #fff;
   outline-offset: 2px;
 }
+
+/* 올린 그림이 남아 있다는 표시. 올린 자리(dropzone) 바로 아래에 붙는다. */
+.kept {
+  margin-top: 10px;
+}
+.kept[hidden] {
+  display: none;
+}
+.kept .modal-note {
+  margin: 0;
+}
