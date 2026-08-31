@@ -54,11 +54,12 @@
   width: 132px;
   height: 132px;
   padding: 0;
-  border-radius: 10px;
   overflow: hidden;
   cursor: pointer;
-  /* 지도는 벽에 걸린 안내판이다. 액자처럼 얇은 테를 준다. */
-  border: 1px solid var(--edge-pill);
+  /* 다른 표면과 같은 규격: 모난 모서리와 3px 테두리. 지도만 둥글면 이 미술관의
+     물건이 아니라 다른 앱에서 온 부품처럼 보인다. */
+  border: 3px solid var(--on-modal);
+  border-radius: 0;
   background: var(--wall);
 }
 .minimap canvas {
@@ -384,12 +385,16 @@ body[data-sheet='expanded'] .controls {
 }
 .lang {
   display: flex;
-  align-items: baseline;
+  /* 가운데로 맞춘다. 글자 크기가 다른 두 조각(이름과 격자)을 baseline 으로
+     맞추면 작은 쪽이 아래로 처져서 줄이 기울어 보였다. */
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   width: 100%;
   min-height: 52px;
-  padding: 0 6px;
+  /* 고른 칸도 같은 여백을 쓴다. 아래 aria-current 에서 이 값을 바꾸면 고를
+     때마다 글자가 옆으로 튄다 — 실제로 층 목록이 그렇게 움직였다. */
+  padding: 0 12px;
   border: 0;
   background: none;
   color: var(--on-modal);
@@ -407,28 +412,18 @@ body[data-sheet='expanded'] .controls {
   image-rendering: pixelated;
   color: var(--on-toast);
   -webkit-text-stroke-color: var(--edge-toast);
-  padding-left: 12px;
 }
 .lang:active {
   filter: invert(1);
 }
 
-/* 언어 칸만 가운데 정렬한다.
- *
- * `.lang` 은 층 고르기 목록도 함께 쓴다(floor.mjs). 그쪽은 이름과 설명을 양 끝으로
- * 미는 것이 맞으므로, 여기서 바꾸는 것은 `#lang-list` 안으로 묶는다. */
+/* 언어 칸은 한 조각뿐이라 가운데로 모은다. 두 조각인 목록(층·단면도)은
+ * 양 끝으로 미는 것이 맞다. 정렬 규격의 예외가 아니라, 조각 수가 다르다. */
 #lang-list .lang {
-  align-items: center;
   justify-content: center;
   min-height: 58px;
-  padding: 0 10px;
   font-size: 17px;
   text-align: center;
-}
-/* 고른 칸을 왼쪽으로 들여쓰면 가운데 정렬이 어긋난다. 층 목록에서는 그 들여쓰기가
- * 맞으므로 여기서만 되돌린다. */
-#lang-list .lang[aria-current='true'] {
-  padding-left: 10px;
 }
 .lang-label {
   display: inline-flex;
@@ -441,14 +436,27 @@ body[data-sheet='expanded'] .controls {
 
 /* 층 고르기 — 찾기 모달 안의 작은 조각 나누기 */
 
+/* ── 모달 안의 정렬 규격 ─────────────────────────────────────────────────
+
+   한 가지로 통일한다: **딸림표는 controls 위에 가운데로, controls 는 폭을 꽉
+   채운다.**
+
+   전에는 딸림표가 왼쪽에 서고 controls 가 그 옆이었다. 층 고르기는 칸이 5개라
+   한 줄에 들어가서 괜찮아 보였지만, 전시실 고르기는 31칸이 네 줄로 접히면서
+   딸림표가 그 네 줄 덩어리의 가운데 높이에 혼자 떠 있었다. 두 모달이 같은
+   부품을 쓰는데 서로 다르게 보인 이유가 이것이다.
+
+   언어 모달이 이미 "제목 가운데 · 칸은 꽉" 이었으므로 그쪽으로 맞췄다. */
 .segmented {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 .segmented-label {
   flex: none;
+  text-align: center;
   font: 400 10.5px/1 var(--sans);
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -459,6 +467,9 @@ body[data-sheet='expanded'] .controls {
 .segmented-row {
   flex: 1;
   display: flex;
+  /* 접혀 내려가도 덩어리가 가운데에 머문다. 왼쪽으로 붙이면 마지막 줄만
+     짧게 남아 목록이 기울어 보인다. */
+  justify-content: center;
   gap: 6px;
 }
 /*
@@ -513,8 +524,10 @@ body[data-sheet='expanded'] .controls {
 
 /* 지금 고른 전시실의 이름. 번호 칸 바로 아래에 붙인다. */
 .chosen-room {
-  margin: -8px 0 14px;
-  padding-left: calc(10px + 3.4em);
+  margin: -6px 0 16px;
+  /* 딸림표가 위로 올라갔으므로 손으로 맞춘 들여쓰기(calc(10px + 3.4em))를
+     버린다. 칸 덩어리와 같이 가운데다. */
+  text-align: center;
   font: 700 13px/1.4 var(--sans);
   letter-spacing: 0.01em;
   color: var(--on-modal);
@@ -544,32 +557,26 @@ body[data-sheet='expanded'] .controls {
 
    축은 왼쪽이다. 미니맵이 좌상단에 있으므로 그 자리에서 펴져 나오는 것처럼
    보인다. 전체도 좌상단을 축으로 조금 커진다. */
-.scrim-pamphlet {
-  /* 다른 모달은 가운데 정렬이지만 팜플렛은 위쪽에 붙는다. 세 폭이 넓어서
-     가운데 정렬하면 작은 화면에서 잘린다. */
-  align-items: flex-start;
-  justify-content: center;
-  overflow: auto;
-  padding: calc(var(--pad) + var(--safe-t)) var(--pad) calc(var(--pad) + var(--safe-b));
-}
 .pamphlet {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   perspective: 1500px;
-  transform-origin: top left;
-  /* 펼쳐진 상태. 닫힌 상태는 [hidden] 에서 온다 */
+  /* 펼쳐진 상태. 닫힌 상태는 .folded 에서 온다 */
   transform: scale(1);
   opacity: 1;
   transition:
     transform 260ms cubic-bezier(0.2, 0.8, 0.25, 1),
     opacity 180ms ease;
 }
+/* 폭은 모달과 같은 종이다. 배경·글자·테두리 두께를 모달에서 그대로 가져온다
+   (배경은 surface.css 가 --bg-modal 로 바른다). 다른 것은 접힌다는 것뿐이다.
+
+   `.modal` 클래스를 그대로 붙이지 않는 이유: `.modal` 에는 rise 애니메이션이
+   걸려 있어서 펼치는 모션과 겹쳐 두 번 움직인다. */
 .fold {
-  width: 218px;
-  padding: 16px;
-  border-radius: 8px;
-  background: var(--paper, #17140f);
-  border: 1px solid var(--edge-pill);
+  width: 252px;
+  padding: 20px var(--pad) var(--pad);
+  border: 3px solid var(--on-modal);
   transform-origin: left center;
   backface-visibility: hidden;
   transition: transform 420ms cubic-bezier(0.2, 0.75, 0.2, 1);
@@ -601,17 +608,11 @@ body[data-sheet='expanded'] .controls {
 .scrim-pamphlet.folded .fold:nth-child(3) {
   transition-delay: 0ms;
 }
-.fold-title {
-  margin: 0 0 10px;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-}
 /* 층 전체를 담은 네모. 정사각형이어야 두 축의 축척이 같다. */
 .fold-plan {
   position: relative;
   aspect-ratio: 1;
-  border: 1px solid var(--edge-pill);
-  border-radius: 4px;
+  border: 2px solid var(--on-modal);
   /* 층은 순환한다. 끝이 이어져 있다는 것을 결로 알린다. */
   background:
     repeating-linear-gradient(0deg, transparent 0 11px, rgba(255, 255, 255, 0.05) 11px 12px),
@@ -626,61 +627,37 @@ body[data-sheet='expanded'] .controls {
   background: #fff;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55);
 }
+/* 폭 안의 사이 띄우기. 세 줄(층 이름 · 전시실 · 지도 방식)이 붙으면 읽히지 않는다. */
+.fold .modal-note {
+  margin: 6px 0 18px;
+}
+.fold .segmented {
+  margin-bottom: 0;
+}
+/* 폭이 좁아서(252px) 단추를 나란히 두면 한국어 이름이 두 줄로 끊긴다
+   ("체험관으/로"). 폭 안에서는 위아래로 쌓는다. */
+.fold .modal-actions {
+  flex-direction: column;
+  margin-top: 12px;
+}
+/* 지금 층의 이름. 평면도 바로 아래에 온다. */
 .fold-line {
-  margin: 10px 0 2px;
-  font-size: 13px;
+  margin: 14px 0 0;
+  font: 400 15px/1.3 var(--serif);
+  text-align: center;
+  color: var(--on-modal);
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.6px var(--edge-modal);
 }
-.fold-note {
-  margin: 6px 0 0;
-  font-size: 12px;
-  opacity: 0.72;
-  line-height: 1.5;
-}
+/* 단면도. 층 고르기 목록(.lang-list)과 같은 부품을 쓰고 순서만 뒤집는다.
+   위층이 위에 오게 — 단면도이므로 목록의 순서가 곧 높이다. */
 .fold-floors {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
-  /* 위층이 위에 오게 뒤집는다. 단면도이므로 목록 순서가 곧 높이다. */
   flex-direction: column-reverse;
-  gap: 4px;
-}
-.fold-floors button {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 9px;
-  font-size: 12px;
-  border-radius: 5px;
-  border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.05);
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-.fold-floors button:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-.fold-floors button[aria-current='true'] {
-  border-color: var(--edge-pill);
-  background: rgba(255, 255, 255, 0.14);
-}
-.fold-floors .fold-grid {
-  opacity: 0.6;
 }
 /* 체험관은 로비에 딸린 방이다. 들여쓰기로 그것을 보인다. */
 .fold-floors .fold-inside {
-  margin-left: 14px;
-  width: calc(100% - 14px);
-}
-.fold-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-.fold-actions .btn {
-  flex: 1;
+  padding-left: 26px;
 }
 @media (max-width: 760px) {
   /* 세 폭이 가로로 안 들어간다. 위아래로 접는다 — 접히는 축만 바뀐다. */

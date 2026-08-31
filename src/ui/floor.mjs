@@ -24,7 +24,11 @@ export function createFloorPicker({ onGo, getTier }) {
         if (floor.tier === current) button.setAttribute('aria-current', 'true');
 
         const name = document.createElement('span');
-        name.textContent = t('floor.name', { level: floor.level });
+        // 로비는 "0층" 이 아니라 로비다. 팜플렛의 단면도와 같은 이름을 써야
+        // 두 곳이 같은 건물을 말하는 것으로 읽힌다.
+        name.textContent = floor.isLobby
+          ? t('floor.lobby')
+          : t('floor.name', { level: floor.level });
 
         const size = document.createElement('span');
         size.className = 'lang-native';

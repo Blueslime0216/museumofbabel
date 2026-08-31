@@ -7,8 +7,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { baseToneOf, createMinimapColours, MINIMAP_SPAN } from '../src/minimap.mjs';
-import { tierSpec, coordinatesToCode, localityMix, decodeFields } from '../src/codec.mjs';
+import {
+  baseToneOf,
+  createMinimapColours,
+  MINIMAP_SPAN,
+  MINIMAP_MODES,
+  ROOM_TINTS,
+} from '../src/minimap.mjs';
+import { tierSpec, coordinatesToCode, localityMix, decodeFields, roomOf } from '../src/codec.mjs';
 
 const LOCALITY = 4;
 
@@ -142,4 +148,74 @@ test('로비에는 작품이 없으므로 지도가 비어 있다', () => {
   const { empty, rgba } = map.cells({ tier: 0, locality: LOCALITY, x: 32n, y: 32n });
   assert.equal(empty, true);
   assert.ok(rgba.every(value => value === 0));
+});
+
+// ── 값 ───────────────────────────────────────────────────────────────────
+//
+// 지도가 느린 것은 검사로 잡기 어렵다. 기계마다 속도가 다르므로 "몇 ms 안" 이라고
+// 못 박으면 다른 기계에서 거짓으로 깨진다. 대신 **비용의 성질**을 붙든다.
+
+test('열쇠를 만드는 값이 좌표 자릿수에 딸리지 않는다', () => {
+  // 예전에는 캐시 열쇠를 `${x},${y}` 로 만들었다. 층 32의 좌표는 12,812비트이고
+  // BigInt → 십진 문자열이 자릿수에 대해 급히 오르므로, 지도 한 장의 열쇠를
+  // 만드는 데 444ms 가 들었다. 캐시가 다 맞아도 그 값을 매번 냈다.
+  //
+  // 여기서는 얕은 층과 깊은 층에서 **두 번째 갱신**(전부 캐시에 맞는 갱신)의
+  // 값을 견준다. 열쇠가 자릿수에 딸리면 깊은 층이 수십 배 느려진다.
+  const map = createMinimapColours();
+
+  const measure = tier => {
+    const bits = tierSpec(tier).axisBits;
+    const x = 1n << BigInt(bits - 2);
+    const y = 1n << BigInt(bits - 3);
+    map.cells({ tier, locality: LOCALITY, x, y }); // 채운다
+    const started = process.hrtime.bigint();
+    for (let round = 0; round < 5; round++) map.cells({ tier, locality: LOCALITY, x, y });
+    return Number(process.hrtime.bigint() - started) / 5 / 1e6;
+  };
+
+  const shallow = measure(4);
+  const deep = measure(32);
+  // 넉넉하게 잡는다. 문자열 열쇠였을 때의 차이는 600배였다.
+  assert.ok(
+    deep < shallow * 25 + 5,
+    `층 4 는 ${shallow.toFixed(2)}ms, 층 32 는 ${deep.toFixed(2)}ms — 열쇠가 자릿수에 딸린다`,
+  );
+});
+
+// ── 전시실 방식 ──────────────────────────────────────────────────────────
+
+test('전시실 방식은 방마다 다른 색을 준다', () => {
+  // 색이 겹치면 경계가 안 보이고, 그러면 이 방식이 답하려는 물음이 사라진다.
+  const seen = new Set(ROOM_TINTS.map(tint => `${tint.r},${tint.g},${tint.b}`));
+  assert.equal(seen.size, ROOM_TINTS.length, '전시실 색이 겹친다');
+});
+
+test('전시실 방식이 좌표의 방과 같은 색을 찍는다', () => {
+  const map = createMinimapColours();
+  const tier = 8;
+  const spec = tierSpec(tier);
+  const x = 9999n;
+  const y = 1234n;
+  const { span, rgba } = map.cells({ tier, locality: LOCALITY, x, y, mode: 'rooms' });
+  const middle = (((span - 1) / 2) * span + (span - 1) / 2) * 4;
+  const tint = ROOM_TINTS[roomOf(x, y)];
+  assert.deepEqual([rgba[middle], rgba[middle + 1], rgba[middle + 2]], [tint.r, tint.g, tint.b]);
+  assert.ok(spec.axisBits > 0);
+});
+
+test('두 방식이 서로의 기억을 섞지 않는다', () => {
+  // 같은 칸이라도 방식마다 다른 값이다. 한 캐시에 담으면 방식을 바꿨을 때
+  // 이전 방식의 색이 그대로 남는다.
+  const map = createMinimapColours();
+  const spot = { tier: 8, locality: LOCALITY, x: 500n, y: 500n };
+  const colour = map.cells({ ...spot, mode: 'colour' });
+  const rooms = map.cells({ ...spot, mode: 'rooms' });
+  const again = map.cells({ ...spot, mode: 'colour' });
+  assert.deepEqual([...again.rgba], [...colour.rgba]);
+  assert.notDeepEqual([...rooms.rgba], [...colour.rgba]);
+});
+
+test('방식 목록에 색과 전시실이 있다', () => {
+  assert.deepEqual(MINIMAP_MODES, ['colour', 'rooms']);
 });

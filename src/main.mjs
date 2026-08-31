@@ -177,6 +177,12 @@ const pamphlet = createPamphlet({
   onGoFloor: tier => jumpRandom(tier),
   onGoLobby: () => goto({ tier: LOBBY_TIER, ...lobbyHome(), workshop: false }),
   onGoWorkshop: () => goto({ tier: LOBBY_TIER, ...lobbyHome(), workshop: true }),
+  // 지도를 보는 방식. 팜플렛이 고르고 미니맵이 그린다.
+  getMapMode: () => minimap.mode,
+  onMapMode: mode => {
+    minimap.setMode(mode);
+    mapDirty = true;
+  },
 });
 
 const minimap = createMinimap({
@@ -198,6 +204,12 @@ let lastCenter = null;
 
 /** 미니맵의 가운데 좌표. 중앙 칸이 바뀔 때만 새로 만든다. */
 let mapSpot = null;
+
+/** 지도를 다시 그려야 하는가. 칸이 바뀌면 선다. */
+let mapDirty = false;
+
+/** 지도에 그린 "보이는 범위". 줌이 이만큼 달라지면 다시 그린다. */
+let lastAcross = 0;
 
 // ── 화면 크기 ────────────────────────────────────────────────────────────
 
@@ -221,6 +233,10 @@ function computeRestZoom() {
 
 function resize() {
   stage.resize();
+  // 지도의 그릴 면적도 여기서만 다시 잰다. 프레임마다 재면 배치를 강제로
+  // 계산하게 만든다.
+  minimap.resize();
+  mapDirty = true;
   restZoom = computeRestZoom();
   if (curtain.phase === PHASE.CLEAR) camera.zoomTo(restZoom);
   dirty = true;
@@ -357,7 +373,12 @@ function applyWorld() {
   camera.snapTo({ x: 0, y: 0 });
   lastCenter = null;
   // 층이 바뀌면 지도가 기억한 색을 버린다. 같은 좌표라도 다른 그림이다.
+  //
+  // 같은 층 안에서 무작위로 옮겨도 여기를 지난다. 칸 번호는 0,0 으로 돌아가므로
+  // reset 이 없으면 지도가 "같은 칸" 이라 여기고 이전 자리를 계속 보여 준다.
   mapSpot = null;
+  mapDirty = false;
+  lastAcross = 0;
   minimap.reset();
 }
 
@@ -690,20 +711,31 @@ function frame(now) {
       // 미니맵의 가운데도 이 칸이다. 좌표는 여기서만 만든다 — 프레임마다
       // 만들면 층 16 에서 그것만으로 예산을 먹는다(위 주석과 같은 이유).
       mapSpot = { x: cx, y: cy };
+      mapDirty = true;
     }
 
-    // 지도는 줌에 따라 "보이는 범위" 네모가 달라지므로 매 프레임 물어본다.
-    // 실제 다시 그리기는 update 안에서 가려낸다 (같은 그림이면 건너뛴다).
+    // 지도를 다시 그릴 때를 여기서 가린다.
+    //
+    // **프레임마다 부르면 안 된다.** 지도를 그리는 값이 싸지 않고(층 32에서 한
+    // 장 80ms), 예전에 이 자리에서 매 프레임 갱신을 걸어 미술관이 멈춘 적이
+    // 있다. 다시 그릴 이유는 둘뿐이다: 칸이 바뀌었거나, 보이는 범위가 눈에
+    // 띄게 달라졌거나.
     if (mapSpot) {
-      minimap.update({
-        tier: state.tier,
-        locality: state.locality,
-        x: mapSpot.x,
-        y: mapSpot.y,
-        across: stage.view.width / camera.zoom,
-        cell: { i, j },
-        objects: stage.lobbyObjects,
-      });
+      const across = stage.view.width / camera.zoom;
+      const zoomed = lastAcross <= 0 || Math.abs(across - lastAcross) / lastAcross > 0.03;
+      if (mapDirty || zoomed) {
+        mapDirty = false;
+        lastAcross = across;
+        minimap.update({
+          tier: state.tier,
+          locality: state.locality,
+          x: mapSpot.x,
+          y: mapSpot.y,
+          across,
+          cell: { i, j },
+          objects: stage.lobbyObjects,
+        });
+      }
     }
   }
 
@@ -774,6 +806,11 @@ Object.assign(window, {
     /** 미니맵. 화면 검사가 갱신이 도는지와 캐시가 사는지를 본다. */
     get minimap() {
       return minimap.stats;
+    },
+    /** 지도 방식을 검사와 자(bench)가 직접 바꾼다. */
+    setMinimapMode(mode) {
+      minimap.setMode(mode);
+      mapDirty = true;
     },
     /** 팜플렛. 열림 상태와 점의 자리를 화면 검사가 본다. */
     get pamphlet() {

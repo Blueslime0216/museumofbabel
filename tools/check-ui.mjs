@@ -1932,6 +1932,123 @@ for (const size of ['mobile', 'desktop']) {
     check('접힘이 끝나면 사라진다', closed === 'hidden', closed);
   }
 
+  // ── 5.11 지도 보는 방식 ───────────────────────────────────────────────
+  {
+    await page.evaluate(() => window.__museum.jumpRandom(8));
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    await page.waitForTimeout(300);
+    const byColour = await mapColours(page);
+
+    await page.locator('#minimap').click();
+    await page.waitForTimeout(700);
+    await page.locator('#pamphlet-mode-row button[data-mode="rooms"]').click();
+    await page.waitForTimeout(400);
+
+    const rooms = await page.evaluate(() => ({
+      mode: window.__museum.minimap.mode,
+      pamphlet: window.__museum.pamphlet.state,
+    }));
+    check('팜플렛에서 전시실 방식으로 바꿀 수 있다', rooms.mode === 'rooms', rooms.mode);
+    // 방식을 바꾸는 것은 자리를 옮기는 일이 아니다. 종이가 닫히면 안 된다.
+    check('방식을 바꿔도 팜플렛은 열려 있다', rooms.pamphlet === 'open', rooms.pamphlet);
+
+    const byRooms = await mapColours(page);
+    check('전시실 방식은 색이 방 수만큼으로 줄어든다', byRooms.colours < byColour.colours, `${byColour.colours} → ${byRooms.colours}`);
+    // 방은 31종이다. 여기에 지금 자리 점과 범위 네모의 색이 몇 가지 더 붙는다.
+    check('전시실 색이 방 수를 넘지 않는다', byRooms.colours <= 31 + 8, `${byRooms.colours}가지`);
+
+    // 고른 방식을 기억한다. 다음에 와도 같은 지도를 본다.
+    await page.keyboard.press('Escape');
+    await page.reload({ waitUntil: 'commit' });
+    await page.waitForFunction(() => window.__museum, null, { timeout: 20000 });
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    const remembered = await page.evaluate(() => window.__museum.minimap.mode);
+    check('고른 방식을 다시 열어도 기억한다', remembered === 'rooms', remembered);
+    await page.evaluate(() => window.__museum.setMinimapMode('colour'));
+  }
+
+  // ── 5.12 지도가 프레임 예산을 먹지 않는다 ──────────────────────────────
+  //
+  // 한때 캐시 열쇠를 `${x},${y}` 로 만들어서, 층 32 의 좌표(12,812비트)를 십진으로
+  // 바꾸는 데 지도 한 장마다 444ms 를 태웠다. 미술관이 멈춰 섰다. 눈으로 보면
+  // "느리다" 뿐이고 어디가 느린지는 보이지 않으므로 숫자로 붙든다.
+  {
+    await page.evaluate(() => window.__museum.jumpRandom(32));
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    await page.waitForTimeout(300);
+
+    const before = await page.evaluate(() => window.__museum.minimap.spent);
+    await page.mouse.move(640, 430);
+    await page.mouse.down();
+    for (let step = 0; step < 20; step++) {
+      await page.mouse.move(640 - step * 14, 430 - step * 7);
+      await page.waitForTimeout(16);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    const after = await page.evaluate(() => window.__museum.minimap.spent);
+
+    // 기계마다 속도가 다르므로 넉넉하게 잡는다. 문자열 열쇠였을 때는 한 번의
+    // 갱신만으로 이 한계를 넘었다.
+    const spent = after - before;
+    check(
+      '가장 깊은 층에서 끌어도 지도가 예산을 먹지 않는다',
+      spent < 150,
+      `${spent.toFixed(1)}ms`,
+    );
+  }
+
+  // ── 5.13 모달 정렬 규격 ───────────────────────────────────────────────
+  //
+  // 딸림표는 칸 위에 가운데로 온다. 전에는 왼쪽에 나란히 섰고, 전시실 칸이 네
+  // 줄로 접히면서 딸림표만 덩어리 가운데 높이에 떠 있었다.
+  {
+    await page.locator('#btn-search').click();
+    await page.waitForTimeout(300);
+
+    for (const [name, group] of [
+      ['층', '#search-floors'],
+      ['전시실', '#search-rooms'],
+    ]) {
+      const label = await page.locator(`${group} .segmented-label`).boundingBox();
+      const row = await page.locator(`${group} .segmented-row`).boundingBox();
+      check(
+        `찾기 모달의 ${name} 딸림표가 칸 위에 있다`,
+        label.y + label.height <= row.y + 1,
+        `딸림표 ${Math.round(label.y + label.height)} / 칸 ${Math.round(row.y)}`,
+      );
+    }
+
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+
+    // 층 목록: 고른 칸이 글자를 옆으로 밀지 않는다.
+    await page.locator('#btn-floor').click();
+    await page.waitForTimeout(300);
+    const padding = await page.evaluate(() =>
+      [...document.querySelectorAll('#floor-list .lang')].map(button => ({
+        current: button.getAttribute('aria-current') === 'true',
+        left: getComputedStyle(button).paddingLeft,
+        align: getComputedStyle(button).alignItems,
+      })),
+    );
+    const lefts = new Set(padding.map(row => row.left));
+    check('층 목록의 칸이 고른 것과 같은 여백을 쓴다', lefts.size === 1, [...lefts].join(' / '));
+    check(
+      '층 목록의 칸이 가운데로 맞는다',
+      padding.every(row => row.align === 'center'),
+      padding[0]?.align,
+    );
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  }
+
   check('로비 검사에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
   await page.close();
 }

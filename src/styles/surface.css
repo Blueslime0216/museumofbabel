@@ -20,6 +20,8 @@
 .btn,
 .menu,
 .modal,
+/* 팜플렛의 폭도 모달과 같은 종이다. 접히는 것만 다르다. */
+.fold,
 .toast,
 .input-row input,
 .dropzone {
@@ -45,7 +47,8 @@
   background-image: var(--bg-plate);
   background-size: cover;
 }
-.modal {
+.modal,
+.fold {
   background-image: var(--bg-modal);
   background-size: cover;
   color: var(--on-modal);

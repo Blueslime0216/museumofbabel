@@ -331,30 +331,38 @@
       >
         <!-- 1폭: 지금 내 자리 -->
         <section class="fold">
-          <h2 class="fold-title" id="pamphlet-title" data-i18n="pamphlet.here">You are here</h2>
+          <h2 class="modal-title" id="pamphlet-title" data-i18n="pamphlet.here">You are here</h2>
           <!-- 층 전체를 담은 네모. 내 자리를 점으로 찍는다. 미니맵과 달리
                내 위치를 가운데 두지 않는다 — 층 안에서의 자리를 보여야 한다. -->
           <div class="fold-plan" id="pamphlet-plan">
             <span class="fold-dot" id="pamphlet-dot"></span>
           </div>
           <p class="fold-line" id="pamphlet-floor"></p>
-          <p class="fold-note" id="pamphlet-room"></p>
+          <p class="modal-note" id="pamphlet-room"></p>
+          <!-- 지도를 어떻게 볼지. 찾기 모달의 층 고르기와 같은 부품이다. -->
+          <div class="segmented" id="pamphlet-mode" role="group" aria-labelledby="pamphlet-mode-label">
+            <span class="segmented-label" id="pamphlet-mode-label" data-i18n="pamphlet.mapMode">
+              Map
+            </span>
+            <div class="segmented-row" id="pamphlet-mode-row"></div>
+          </div>
         </section>
         <!-- 2폭: 건물 단면도 -->
         <section class="fold">
-          <h2 class="fold-title" data-i18n="pamphlet.building">The building</h2>
-          <ul class="fold-floors" id="pamphlet-floors"></ul>
-          <p class="fold-note" data-i18n="pamphlet.buildingNote">
+          <h2 class="modal-title" data-i18n="pamphlet.building">The building</h2>
+          <ul class="lang-list fold-floors" id="pamphlet-floors"></ul>
+          <p class="modal-note" data-i18n="pamphlet.buildingNote">
             each floor is a different grain.
           </p>
         </section>
         <!-- 3폭: 로비와 체험관 -->
         <section class="fold">
-          <h2 class="fold-title" data-i18n="pamphlet.lobby">Ground floor</h2>
-          <p class="fold-note" data-i18n="pamphlet.lobbyNote">
+          <h2 class="modal-title" data-i18n="pamphlet.lobby">Ground floor</h2>
+          <p class="modal-note" data-i18n="pamphlet.lobbyNote">
             the lobby holds the sign, today's pictures and the workshop.
           </p>
-          <div class="fold-actions">
+          <!-- 가는 곳 둘은 나란히, 닫기는 따로. 찾기 모달의 취소·이동과 같은 규격이다. -->
+          <div class="modal-actions">
             <button class="btn" id="pamphlet-to-lobby" data-i18n="pamphlet.toLobby">
               To the lobby
             </button>
@@ -362,7 +370,7 @@
               To the workshop
             </button>
           </div>
-          <div class="fold-actions">
+          <div class="modal-actions">
             <button class="btn" data-close data-i18n="common.close">Close</button>
           </div>
         </section>

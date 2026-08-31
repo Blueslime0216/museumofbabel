@@ -18,7 +18,7 @@
 // 브라우저가 부드럽게 보간해서 칸 경계가 뭉갠다. 작은 캔버스에 원본을 두고
 // `imageSmoothingEnabled = false` 로 확대하면 칸이 칸으로 보인다.
 
-import { createMinimapColours, MINIMAP_SPAN } from '../minimap.mjs';
+import { createMinimapColours, MINIMAP_SPAN, MINIMAP_MODES } from '../minimap.mjs';
 import { LOBBY_SPAN, LOBBY_WALL } from '../lobby.mjs';
 import { isLobbyTier } from '../codec.mjs';
 
@@ -37,6 +37,9 @@ const OBJECT = 'rgba(233, 226, 214, 0.78)';
  * `onOpen` 은 눌렀을 때 부른다. 지도는 그림이 아니라 버튼이다 — 팜플렛을 펼치는
  * 손잡이다.
  */
+/** 고른 방식을 기억하는 자리. 다음에 와도 같은 지도를 본다. */
+const STORE_KEY = 'babel.minimap.mode';
+
 export function createMinimap({ button, onOpen }) {
   const canvas = button.querySelector('canvas');
   const ctx = canvas.getContext('2d');
@@ -48,21 +51,39 @@ export function createMinimap({ button, onOpen }) {
 
   let last = null;
   let painted = 0;
+  let spent = 0;
+  let size = 0;
+  let mode = 'colour';
+
+  try {
+    const saved = localStorage.getItem(STORE_KEY);
+    if (MINIMAP_MODES.includes(saved)) mode = saved;
+  } catch {
+    // 저장소를 막아 둔 브라우저가 있다. 기본값으로 간다.
+  }
 
   button.addEventListener('click', () => onOpen?.());
 
-  /** 그릴 면적을 화면 배율에 맞춘다. 안 맞추면 흐릿해진다. */
+  /**
+   * 그릴 면적을 화면 배율에 맞춘다. 안 맞추면 흐릿해진다.
+   *
+   * **프레임마다 부르면 안 된다.** getBoundingClientRect 는 배치를 강제로
+   * 계산하게 만든다. 창 크기가 바뀔 때만 부른다.
+   */
   function fit() {
     const rect = button.getBoundingClientRect();
     const dpr = Math.min(3, window.devicePixelRatio || 1);
-    const size = Math.max(1, Math.round(rect.width * dpr));
-    if (canvas.width !== size || canvas.height !== size) {
-      canvas.width = size;
-      canvas.height = size;
+    const next = Math.max(1, Math.round(rect.width * dpr));
+    size = next;
+    if (canvas.width !== next || canvas.height !== next) {
+      canvas.width = next;
+      canvas.height = next;
       last = null; // 크기가 바뀌었으니 다시 그린다
     }
-    return canvas.width;
+    return size;
   }
+
+  fit();
 
   /** 칸 색을 확대해 채운다. 작품 층에서 쓴다. */
   function paintCells(size, cells) {
@@ -96,21 +117,24 @@ export function createMinimap({ button, onOpen }) {
      * 지도 안에서 내가 어느 만큼을 보고 있는지가 없으면 축척을 알 수 없다.
      */
     update({ tier, locality, x, y, across = 0, cell = null, objects = [] }) {
-      const size = fit();
       const lobby = isLobbyTier(tier);
-      // 로비에서는 물건이 자리를 옮기지 않으므로 개수만 봐도 충분하다.
+
+      // 열쇠에 좌표를 **문자열로 넣지 않는다.** 층 32의 좌표를 십진으로 바꾸는
+      // 데 0.4ms 가 들고, 그것을 프레임마다 태워 미술관을 멈춰 세운 적이 있다.
+      // 칸 번호(cell)로 견준다 — 좌표가 바뀌면 칸도 바뀐다.
       const key = lobby
-        ? `L:${x},${y}:${objects.length}:${size}`
-        : `${tier}:${locality}:${x},${y}:${Math.round(across * 4)}:${size}`;
+        ? `L:${cell?.i},${cell?.j}:${objects.length}:${size}`
+        : `${tier}:${locality}:${cell?.i},${cell?.j}:${mode}:${Math.round(across * 2)}:${size}`;
       if (key === last) return;
       last = key;
 
+      const started = performance.now();
       ctx.clearRect(0, 0, size, size);
 
       if (lobby) {
         paintRoom(size, objects);
       } else {
-        paintCells(size, colours.cells({ tier, locality, x, y }));
+        paintCells(size, colours.cells({ tier, locality, x, y, mode }));
       }
 
       // 보이는 범위. 지도의 한 칸이 몇 px 인지에서 나온다.
@@ -133,6 +157,7 @@ export function createMinimap({ button, onOpen }) {
       ctx.fill();
 
       painted++;
+      spent += performance.now() - started;
       if (cell) button.dataset.cell = `${cell.i},${cell.j}`;
     },
 
@@ -142,9 +167,35 @@ export function createMinimap({ button, onOpen }) {
       last = null;
     },
 
-    /** 화면 검사가 보는 값. 몇 번 그렸는지로 갱신이 도는지 확인한다. */
+    /** 창 크기가 바뀌었을 때만 부른다. 배치를 강제로 계산하게 만든다. */
+    resize() {
+      fit();
+    },
+
+    get mode() {
+      return mode;
+    },
+
+    /** 팜플렛이 부른다. 다음 갱신에서 새 방식으로 다시 그린다. */
+    setMode(next) {
+      if (!MINIMAP_MODES.includes(next) || next === mode) return;
+      mode = next;
+      last = null;
+      try {
+        localStorage.setItem(STORE_KEY, next);
+      } catch {
+        // 기억하지 못해도 이번 관람 동안은 유지된다.
+      }
+    },
+
+    /**
+     * 화면 검사가 보는 값.
+     *
+     * `spent` 는 지도를 그리는 데 쓴 시간의 합이다. 프레임 예산을 먹고 있는지
+     * 사람이 눈으로 알 수 없어서 숫자로 내놓는다.
+     */
     get stats() {
-      return { painted, cached: colours.size };
+      return { painted, cached: colours.size, mode, spent: Math.round(spent * 10) / 10 };
     },
   };
 }
