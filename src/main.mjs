@@ -155,6 +155,9 @@ const languagePicker = createLanguagePicker({
     sheet.refresh();
     floorPicker.refresh();
     pamphlet.refresh();
+    // 로비의 딸림표도 그 언어로 바뀐다. 그림은 그대로 두고 글만 갈아 끼운다.
+    labelLobbyObjects(stage.lobbyObjects);
+    dirty = true;
   },
 });
 
@@ -285,6 +288,32 @@ async function renderAddress({ tier, locality, x, y }) {
   return createImageBitmap(new ImageData(new Uint8ClampedArray(frame.rgba), CANVAS, CANVAS));
 }
 
+/**
+ * 로비 물건에 딸림표 글을 넣는다.
+ *
+ * 글은 UI 의 것이다. lobby.mjs 는 어느 방의 그림인지(`roomName`)만 알고, 그것을
+ * 무슨 말로 적을지는 여기서 정한다 — 전시실 이름이 사전에 있기 때문이다.
+ *
+ * 언어를 바꾸면 다시 부른다. 그래서 물건을 다시 만들지 않고 글만 갈아 끼운다.
+ */
+function labelLobbyObjects(objects) {
+  for (const object of objects) {
+    if (object.roomName) {
+      // 오늘의 그림. 큰 글씨가 방 이름이고 작은 글씨가 무엇인지다.
+      object.text = t(`room.${object.roomName}`);
+      object.note = t(object.labelKey);
+    } else if (object.name) {
+      // 후원자. 이름이 먼저다.
+      object.text = object.name;
+      object.note = t(object.labelKey);
+    } else {
+      object.text = t(object.labelKey);
+      object.note = '';
+    }
+  }
+  return objects;
+}
+
 async function prepareLobby() {
   if (!isLobbyTier(state.tier)) {
     stage.setLobbyObjects([]);
@@ -293,6 +322,7 @@ async function prepareLobby() {
 
   // 같은 층에 방이 둘이다. 로비와 체험관은 바닥이 같고 놓인 물건만 다르다.
   const objects = state.workshop ? workshopObjects() : lobbyObjects({ patrons: PATRONS });
+  labelLobbyObjects(objects);
 
   await Promise.all(
     objects.map(async object => {
@@ -844,6 +874,10 @@ Object.assign(window, {
         size: object.size,
         hasImage: Boolean(object.bitmap),
         action: object.action ?? null,
+        // 딸림표. 화면 검사가 방 이름이 제대로 들어갔는지 본다.
+        text: object.text ?? '',
+        note: object.note ?? '',
+        room: object.roomName ?? null,
       }));
     },
     /** 미니맵. 화면 검사가 갱신이 도는지와 캐시가 사는지를 본다. */

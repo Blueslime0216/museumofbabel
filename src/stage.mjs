@@ -14,6 +14,14 @@ import { worldToScreen } from './camera.mjs';
 import { isLobbyTier } from './codec.mjs';
 import { lobbyTilePhase } from './lobby.mjs';
 
+/**
+ * 로비 딸림표를 적기 시작하는 크기(화면 px).
+ *
+ * 물건이 이보다 작게 보이면 글자를 적지 않는다. 로비에는 물건이 서른 개 넘게
+ * 있으므로, 작을 때도 적으면 화면이 읽을 수 없는 글자로 덮인다.
+ */
+const LABEL_AT = 92;
+
 /** 전시물 사이의 벽. 한 변에 대한 비율. */
 const GAP = 0.06;
 
@@ -160,7 +168,49 @@ export function createStage({ canvas, camera, tiles, zoomBudgetFor = null, wall 
       const [sx, sy] = worldToScreen(camera, wx, wy, view.width, view.height);
       const side = object.size * camera.zoom;
       ctx.drawImage(object.bitmap, sx - side / 2, sy - side / 2, side, side);
+      paintLobbyLabel(object, sx, sy + side / 2);
     }
+  }
+
+  /**
+   * 물건 아래에 딸림표를 적는다.
+   *
+   * 로비에는 벽에 걸린 그림만 있고 그것이 무엇인지 말해 주는 것이 없었다. 미술관
+   * 이라면 작품 옆에 이름표가 있다.
+   *
+   * **너무 작으면 적지 않는다.** 멀리서 보면 글자가 뭉개져 잡음이 되고, 31장이
+   * 함께 있으므로 화면이 글자로 덮인다. 물건이 화면에서 이만큼 커졌을 때만 적는다.
+   *
+   * 글자는 캔버스에 직접 그린다. DOM 으로 얹으면 31개 요소가 프레임마다 자리를
+   * 다시 잡아야 하고, 그것은 배치 계산을 프레임마다 강제하는 일이다.
+   */
+  function paintLobbyLabel(object, sx, bottom) {
+    const side = object.size * camera.zoom;
+    if (side < LABEL_AT || !object.text) return;
+
+    // 글자 크기는 물건 크기를 따라간다. 다만 너무 커지지 않게 묶는다.
+    const size = Math.max(10, Math.min(15, side * 0.11));
+    ctx.save();
+    ctx.font = `600 ${size}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    // 벽 위에 놓이므로 테두리를 두른다. 그림 위에 걸치는 일도 있다.
+    ctx.lineWidth = Math.max(2, size * 0.28);
+    ctx.strokeStyle = 'rgba(8, 7, 6, 0.85)';
+    ctx.fillStyle = 'rgba(239, 233, 221, 0.94)';
+    ctx.lineJoin = 'round';
+    const top = bottom + size * 0.45;
+    ctx.strokeText(object.text, sx, top);
+    ctx.fillText(object.text, sx, top);
+    if (object.note) {
+      const small = size * 0.82;
+      ctx.font = `400 ${small}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.lineWidth = Math.max(1.6, small * 0.26);
+      ctx.fillStyle = 'rgba(239, 233, 221, 0.72)';
+      ctx.strokeText(object.note, sx, top + size * 1.25);
+      ctx.fillText(object.note, sx, top + size * 1.25);
+    }
+    ctx.restore();
   }
 
   /**

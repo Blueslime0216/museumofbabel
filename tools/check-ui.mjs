@@ -397,6 +397,20 @@ for (const size of ['mobile', 'desktop']) {
       requestAnimationFrame(tick);
     });
 
+  // 그림자를 재기 전에 **자리를 고정한다.**
+  //
+  // 이 측정은 옆 작품의 밝기를 견주는 것이므로 어떤 그림이 옆에 있는지에 딸린다.
+  // 무작위 자리에서 재면 어떤 날은 0.79, 어떤 날은 0.801 이 나와서 임계값을
+  // 스친다(실제로 그렇게 흔들렸다). 정해진 주소에서 재면 늘 같은 수가 나온다.
+  await page.evaluate(address => {
+    location.search = `?a=${address}`;
+  }, addressOf(8));
+  await page.waitForFunction(() => window.__museum, null, { timeout: 20000 });
+  await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+    timeout: 30000,
+  });
+  await page.waitForTimeout(300);
+
   // 고른다. 카메라가 그 전시물로 옮겨 가 멈출 때까지 기다린다.
   await startTrace();
   await page.mouse.click(500, 420);
@@ -723,7 +737,19 @@ for (const size of ['mobile', 'desktop']) {
     );
 
     // 작품 정보를 열 수 없다. 로비에는 작품이 없다.
-    await page.click('#stage', { position: { x: 200, y: 200 } });
+    // 빈 자리를 앱에 물어서 고른다. 좌표를 손으로 적으면 로비에 물건이 늘어날
+    // 때마다 그 자리가 그림 위가 되고, 검사는 "빈 벽을 눌렀다" 고 믿은 채로
+    // 다른 층으로 떠나 버린다. 실제로 31장이 걸리면서 그렇게 됐다.
+    const empty = await page.evaluate(() => {
+      for (let x = 60; x < window.innerWidth - 60; x += 40) {
+        for (let y = 200; y < window.innerHeight - 120; y += 40) {
+          if (!window.__museum.stage.lobbyObjectAt(x, y)) return { x, y };
+        }
+      }
+      return null;
+    });
+    check('로비에 누를 수 있는 빈 벽이 있다', empty !== null, JSON.stringify(empty));
+    await page.mouse.click(empty.x, empty.y);
     await page.waitForTimeout(350);
     const sheetState = await page.evaluate(
       () => document.getElementById('sheet').dataset.state,
@@ -1652,7 +1678,7 @@ for (const size of ['mobile', 'desktop']) {
   {
     const objects = await page.evaluate(() => window.__museum.lobby);
     const logo = objects.find(object => object.id === 'logo');
-    check('로비에 물건이 놓여 있다', objects.length >= 12, `${objects.length}개`);
+    check('로비에 물건이 놓여 있다', objects.length >= 33, `${objects.length}개`);
     check('가운데에 표지가 있다', logo !== undefined && logo.x === 32 && logo.y === 32);
     check('표지의 그림이 실려 있다', logo?.hasImage === true);
     // 표지만 진짜 이미지다. 나머지는 주소로 그린다.
@@ -1679,7 +1705,18 @@ for (const size of ['mobile', 'desktop']) {
     const today = objects.filter(object => object.id.startsWith('today-'));
     const workshop = objects.find(object => object.id === 'workshop');
 
-    check('오늘의 그림이 열 장 걸려 있다', today.length === 10, `${today.length}장`);
+    check('오늘의 그림이 전시실마다 한 장이다', today.length === 31, `${today.length}장`);
+    // 딸림표. 그림만 걸려 있으면 그것이 무엇인지 알 수 없다.
+    check(
+      '오늘의 그림에 방 이름이 붙어 있다',
+      today.every(picture => picture.text.length > 0 && picture.room),
+      today[0] ? `${today[0].text} / ${today[0].note}` : '없다',
+    );
+    check(
+      '방 이름이 서로 다르다',
+      new Set(today.map(picture => picture.text)).size === today.length,
+      `${new Set(today.map(picture => picture.text)).size}가지`,
+    );
     check(
       '오늘의 그림이 모두 그려졌다',
       today.every(object => object.hasImage),

@@ -38,7 +38,7 @@
 // 이미지를 가져오지 않는다"가 로비에서도 지켜진다. 후원자의 사진을 호스팅하지
 // 않는 이유도 이것이다.
 
-import { CANVAS, LOBBY_AXIS_BITS, axisSize, axisBitsFor } from './codec.mjs';
+import { CANVAS, LOBBY_AXIS_BITS, axisSize, axisBitsFor, ROOMS, roomOf } from './codec.mjs';
 
 /** 로비 한 변의 칸 수. 이만큼 걸으면 제자리로 온다. */
 export const LOBBY_SPAN = axisSize(LOBBY_AXIS_BITS);
@@ -140,8 +140,14 @@ export const LOGO_SIZE = 7;
 /** 물건끼리 이만큼은 떨어져 있어야 한다(칸). 겹침 방지가 이 값을 쓴다. */
 export const MIN_GAP = 1.2;
 
-/** 오늘의 그림 개수. */
-export const TODAY_COUNT = 10;
+/**
+ * 오늘의 그림 개수. **전시실마다 한 장이다.**
+ *
+ * 열 장이던 것을 31장으로 늘렸다. 로비가 비어 보였고, 무엇보다 "전시실마다
+ * 하나" 는 그 자체로 뜻이 있다 — 오늘 이 미술관의 서른한 방이 각각 무엇을
+ * 걸었는지가 로비 한 바퀴로 보인다.
+ */
+export const TODAY_COUNT = ROOMS.length;
 
 /** 오늘의 그림 한 변(칸). */
 const TODAY_SIZE = 4;
@@ -155,18 +161,48 @@ const WORKSHOP_SIZE = 5;
 /**
  * 물건을 놓을 고리. 로고 중심에서 이 거리 사이에 흩어진다.
  *
- * 안쪽은 로고(7칸)와 겹치지 않을 만큼, 바깥쪽은 첫 화면에 들어올 만큼이다.
- * 데스크톱에서 화면에 36칸쯤 보이므로 반경 17이면 대체로 한눈에 들어온다.
+ * 안쪽은 로고(7칸)와 겹치지 않을 만큼이다.
+ *
+ * 바깥쪽을 17에서 24로 넓혔다. 그림이 31장이 되면서 고리의 넓이가 모자랐다.
+ * 필요한 넓이는 31장 x (4칸 + 여백)² ≈ 775칸², 반경 17의 고리는 730칸² 뿐이다.
+ * 24면 1,590칸² 이라 후원자까지 놓고도 남는다. 순환 경계(0·63)에는 닿지 않는다.
+ *
+ * 첫 화면에 36칸쯤 보이므로 반경 18 밖의 그림은 걸어 나가야 만난다. 그것이
+ * 로비를 "한눈에 다 본 곳" 이 아니라 "돌아다닐 곳" 으로 만든다.
  */
-const RING = { inner: 7.5, outer: 17 };
+const RING = { inner: 7.5, outer: 24 };
 
 /**
  * 오늘의 그림이 걸리는 층.
  *
- * 층을 섞는다. 층 4는 블록이 커서 색면처럼 보이고 층 32는 아주 세밀하다.
- * 한 층으로만 채우면 열 장이 다 비슷해 보인다.
+ * 층을 섞어 결을 다르게 한다. 층 4와 32를 뺀 이유는 값이다 — 한 장을 그리는 데
+ * 층 4가 8.0ms, 층 32가 5.4ms 인데 층 8은 2.2ms, 층 16은 2.4ms 다(실측). 31장을
+ * 커튼 뒤에서 그려야 하므로 71ms 와 210ms 의 차이가 된다.
+ *
+ * 결의 다양함은 이제 층이 아니라 **전시실**이 맡는다. 서른한 방이 각자 다른
+ * 방식으로 읽으므로 한 층 안에서도 그림이 서로 닮지 않는다.
  */
-const TODAY_TIERS = [4, 8, 16, 32];
+const TODAY_TIERS = [8, 16];
+
+/**
+ * 그 전시실 안에 있는 좌표를 하나 찾는다. 못 찾으면 null.
+ *
+ * 방은 보로노이이므로 "이 방의 좌표" 를 계산하는 식이 없다. 코덱의 씨앗 해시를
+ * 여기로 베껴 오면 계산할 수 있지만, 그것은 방 배정 규칙을 두 곳에 두는 일이고
+ * 한쪽만 고쳐지면 로비가 거짓 딸림표를 달게 된다.
+ *
+ * 그래서 뽑아 보고 물어본다(`roomOf`). 방이 서른한 개이므로 한 방을 찾는 데
+ * 평균 31번이고, 한 번이 층 8에서 0.006ms 다. 서른한 방을 다 채워도 6ms 안이다.
+ */
+function addressInRoom(random, tier, roomIndex, tries = 400) {
+  const axisBits = axisBitsFor(tier);
+  for (let attempt = 0; attempt < tries; attempt++) {
+    const x = randomAxis(random, axisBits);
+    const y = randomAxis(random, axisBits);
+    if (roomOf(x, y) === roomIndex) return { tier, locality: LOBBY_LOCALITY, x, y };
+  }
+  return null;
+}
 
 /** 로비 물건의 국소성 단계. 주소에 들어가므로 하나로 고정한다. */
 const LOBBY_LOCALITY = 4;
@@ -344,27 +380,31 @@ export function lobbyObjects({ date = new Date(), patrons = [] } = {}) {
 
   // ── 오늘의 그림 ──
   //
-  // 좌표를 무작위로 뽑는다. 보기 좋은 것을 골라 두지 않는다 — 무작위 좌표는
-  // 무작위 그림이고, 그것이 이 미술관의 정직한 성질이다. 골라 두면 "모든 그림이
-  // 이미 걸려 있다" 가 "우리가 고른 그림이 걸려 있다" 로 바뀐다.
-  for (let index = 0; index < TODAY_COUNT; index++) {
+  // **전시실마다 한 장.** 방 안의 좌표는 무작위로 뽑는다. 보기 좋은 것을 골라
+  // 두지 않는다 — 무작위 좌표는 무작위 그림이고, 그것이 이 미술관의 정직한
+  // 성질이다. 골라 두면 "모든 그림이 이미 걸려 있다" 가 "우리가 고른 그림이
+  // 걸려 있다" 로 바뀐다.
+  //
+  // 방을 고르는 것은 큐레이션이 아니다. 서른한 방을 빠짐없이 한 번씩 도는 것이고,
+  // 그 안에서 무엇이 걸리는지는 여전히 우연이다.
+  for (const [index, room] of ROOMS.entries()) {
     const spot = findSpot(random, TODAY_SIZE, taken, centre);
     if (!spot) continue;
 
-    const tier = TODAY_TIERS[Math.floor(random() * TODAY_TIERS.length)];
-    const axisBits = axisBitsFor(tier);
+    const tier = TODAY_TIERS[index % TODAY_TIERS.length];
+    const address = addressInRoom(random, tier, index);
+    if (!address) continue; // 그 방을 못 찾았다. 빈 자리로 두는 것이 낫다
+
     objects.push({
       id: `today-${index}`,
       kind: 'art',
       ...spot,
       labelKey: 'lobby.today',
+      // 어느 방의 그림인지. 딸림표에 방 이름을 적는 데 쓴다.
+      roomIndex: index,
+      roomName: room.name,
       action: 'artwork',
-      address: {
-        tier,
-        locality: LOBBY_LOCALITY,
-        x: randomAxis(random, axisBits),
-        y: randomAxis(random, axisBits),
-      },
+      address,
     });
     taken.push(spot);
   }

@@ -19,7 +19,7 @@ import {
   MIN_GAP,
   TODAY_COUNT,
 } from '../src/lobby.mjs';
-import { axisBitsFor } from '../src/codec.mjs';
+import { axisBitsFor, ROOMS, roomOf } from '../src/codec.mjs';
 
 const DAY = new Date(2026, 7, 31); // 2026-08-31. 지역 시간으로 고정한다
 const CENTRE = Number(LOBBY_SPAN / 2n);
@@ -90,21 +90,38 @@ test('체험관 문의 자리는 날마다 바뀌지 않는다', () => {
   assert.equal(first.action, 'workshop');
 });
 
-test('오늘의 그림이 열 장이다', () => {
+test('오늘의 그림이 전시실마다 한 장이다', () => {
   const objects = lobbyObjects({ date: DAY });
   const today = objects.filter(object => object.id.startsWith('today-'));
   assert.equal(today.length, TODAY_COUNT);
+  assert.equal(TODAY_COUNT, ROOMS.length);
+  // 방을 빠짐없이 한 번씩. 겹치면 어떤 방은 오늘 아무것도 걸지 않은 것이 된다.
+  const rooms = new Set(today.map(object => object.roomIndex));
+  assert.equal(rooms.size, ROOMS.length, `${rooms.size}개 방뿐이다`);
 });
 
-test('오늘의 그림이 여러 층에서 온다', () => {
-  // 한 층으로만 채우면 열 장이 다 비슷해 보인다.
-  const tiers = new Set();
-  for (let day = 1; day <= 20; day++) {
-    for (const object of lobbyObjects({ date: new Date(2026, 7, day) })) {
-      if (object.id.startsWith('today-')) tiers.add(object.address.tier);
-    }
+test('오늘의 그림이 정말 그 전시실에 걸려 있다', () => {
+  // 딸림표에 방 이름을 적으므로, 좌표가 다른 방에 있으면 로비가 거짓말을 한다.
+  // 방을 계산으로 정하지 않고 뽑아서 물어보는 방식이라 이 검사가 그 결과를 지킨다.
+  for (const object of lobbyObjects({ date: DAY })) {
+    if (!object.id.startsWith('today-')) continue;
+    assert.equal(
+      roomOf(object.address.x, object.address.y),
+      object.roomIndex,
+      `${object.id} 가 ${object.roomName} 방이 아니다`,
+    );
+    assert.equal(ROOMS[object.roomIndex].name, object.roomName);
   }
-  assert.ok(tiers.size >= 3, `층이 ${[...tiers].join(', ')} 뿐이다`);
+});
+
+test('오늘의 그림이 한 결로만 채워지지 않는다', () => {
+  // 층 4(8.0ms)와 32(5.4ms)는 값이 비싸서 31장을 그리기에 맞지 않는다. 층 8과
+  // 16 두 결을 쓰고, 결의 다양함은 전시실이 맡는다. 한 층뿐이면 안 된다.
+  const tiers = new Set();
+  for (const object of lobbyObjects({ date: DAY })) {
+    if (object.id.startsWith('today-')) tiers.add(object.address.tier);
+  }
+  assert.ok(tiers.size >= 2, `층이 ${[...tiers].join(', ')} 뿐이다`);
 });
 
 test('모든 주소가 그 층의 축 안에 있다', () => {
