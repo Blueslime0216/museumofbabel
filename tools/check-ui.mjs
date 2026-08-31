@@ -1907,6 +1907,28 @@ for (const size of ['mobile', 'desktop']) {
     const folds = await page.locator('#pamphlet .fold').count();
     check('팜플렛이 세 폭이다', folds === 3, `${folds}폭`);
 
+    // 펼치는 순서: 가운데가 먼저 놓이고 좌우가 열린다. 좌우의 축은 각자 가운데
+    // 쪽 모서리이고, 그래야 바깥으로 열린다. 축이 같으면 문짝처럼 보인다.
+    const motion = await page.evaluate(() => {
+      const at = selector => {
+        const style = getComputedStyle(document.querySelector(selector));
+        return { origin: style.transformOrigin, delay: style.transitionDelay };
+      };
+      return { left: at('.fold-left'), centre: at('.fold-centre'), right: at('.fold-right') };
+    });
+    const [leftX] = motion.left.origin.split(' ').map(Number.parseFloat);
+    const [rightX] = motion.right.origin.split(' ').map(Number.parseFloat);
+    check('왼쪽 폭은 오른쪽 모서리를 축으로 연다', leftX > 100, motion.left.origin);
+    check('오른쪽 폭은 왼쪽 모서리를 축으로 연다', rightX < 10, motion.right.origin);
+    // 가운데가 먼저다. 늦으면 좌우가 허공에서 펴진다.
+    const ms = value => Number.parseFloat(value) * (value.includes('ms') ? 1 : 1000);
+    check(
+      '가운데 폭이 좌우보다 먼저 놓인다',
+      ms(motion.centre.delay) < ms(motion.left.delay) &&
+        ms(motion.left.delay) <= ms(motion.right.delay),
+      `가운데 ${motion.centre.delay} · 왼쪽 ${motion.left.delay} · 오른쪽 ${motion.right.delay}`,
+    );
+
     // 점은 층 전체를 담은 네모 안의 비율이다. 가운데(50%)에 고정돼 있으면
     // 미니맵을 그대로 옮겨 온 것이고, 층 안의 자리를 말하지 못한다.
     const left = Number.parseFloat(open.dot.left);
@@ -2000,6 +2022,45 @@ for (const size of ['mobile', 'desktop']) {
     check('고른 방식을 다시 열어도 기억한다', remembered === 'rooms', remembered);
     await page.locator('#minimap-mode').click();
     await page.waitForTimeout(300);
+  }
+
+  // ── 5.11a 단추가 단추처럼 보인다 ──────────────────────────────────────
+  //
+  // 손이 닿는 것에는 hover 와 키보드 테가 있어야 한다. 없으면 눌리는 것인지
+  // 알 수 없다. 실제 픽셀을 견줘서 "달라 보이는가" 를 확인한다.
+  {
+    const target = page.locator('#minimap-mode');
+    const box = await target.boundingBox();
+    const shot = () => page.screenshot({ clip: box });
+
+    await page.mouse.move(5, 400); // 멀리 치운다
+    await page.waitForTimeout(150);
+    const plain = await shot();
+    await target.hover();
+    await page.waitForTimeout(150);
+    const hovered = await shot();
+    check('단추에 hover 가 있다', !plain.equals(hovered), `${plain.length} → ${hovered.length}`);
+
+    // 키보드로 옮겨 갔을 때 테가 보인다.
+    await page.mouse.move(5, 400);
+    await page.waitForTimeout(120);
+    const outlined = await page.evaluate(() => {
+      const button = document.getElementById('minimap-mode');
+      button.focus();
+      // :focus-visible 은 키보드로 왔을 때만 나온다. 실제 키로 옮겨 본다.
+      return getComputedStyle(button).outlineWidth;
+    });
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(120);
+    const focused = await page.evaluate(() => {
+      const active = document.activeElement;
+      return { tag: active?.tagName ?? '', outline: getComputedStyle(active).outlineWidth };
+    });
+    check(
+      '키보드로 옮기면 테가 보인다',
+      Number.parseFloat(focused.outline) >= 2,
+      `${focused.tag} ${focused.outline} (마우스 초점 ${outlined})`,
+    );
   }
 
   // ── 5.11b 지도 배율 ───────────────────────────────────────────────────

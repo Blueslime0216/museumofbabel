@@ -363,8 +363,19 @@
         aria-labelledby="pamphlet-title"
         id="pamphlet"
       >
-        <!-- 1폭: 지금 내 자리 -->
-        <section class="fold">
+        <!-- 왼쪽 폭: 건물 단면도.
+             DOM 순서가 보이는 순서와 같다. 그래야 키보드로 넘길 때 왼쪽에서
+             오른쪽으로 간다. 가운데 폭이 먼저 놓이고 좌우가 펴지므로, 가장
+             먼저 읽어야 하는 "지금 이 자리" 를 가운데에 두었다. -->
+        <section class="fold fold-left">
+          <h2 class="modal-title" data-i18n="pamphlet.building">The building</h2>
+          <ul class="lang-list fold-floors" id="pamphlet-floors"></ul>
+          <p class="modal-note" data-i18n="pamphlet.buildingNote">
+            each floor is a different grain.
+          </p>
+        </section>
+        <!-- 가운데 폭: 지금 내 자리 -->
+        <section class="fold fold-centre">
           <h2 class="modal-title" id="pamphlet-title" data-i18n="pamphlet.here">You are here</h2>
           <!-- 층 전체를 담은 네모. 내 자리를 점으로 찍는다. 미니맵과 달리
                내 위치를 가운데 두지 않는다 — 층 안에서의 자리를 보여야 한다. -->
@@ -374,16 +385,8 @@
           <p class="fold-line" id="pamphlet-floor"></p>
           <p class="modal-note" id="pamphlet-room"></p>
         </section>
-        <!-- 2폭: 건물 단면도 -->
-        <section class="fold">
-          <h2 class="modal-title" data-i18n="pamphlet.building">The building</h2>
-          <ul class="lang-list fold-floors" id="pamphlet-floors"></ul>
-          <p class="modal-note" data-i18n="pamphlet.buildingNote">
-            each floor is a different grain.
-          </p>
-        </section>
-        <!-- 3폭: 로비와 체험관 -->
-        <section class="fold">
+        <!-- 오른쪽 폭: 로비와 체험관 -->
+        <section class="fold fold-right">
           <h2 class="modal-title" data-i18n="pamphlet.lobby">Ground floor</h2>
           <p class="modal-note" data-i18n="pamphlet.lobbyNote">
             the lobby holds the sign, today's pictures and the workshop.

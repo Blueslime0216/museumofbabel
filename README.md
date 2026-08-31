@@ -75,7 +75,7 @@ npm run preview    # serve the build on :4173
 npm test           # 149 unit tests
 npm run check      # tests + function checks + codec hash verification
 npm run check-api  # 45 checks; calls the serverless handlers directly
-npm run check-ui   # 215 checks; needs `npm run preview` running first
+npm run check-ui   # 220 checks; needs `npm run preview` running first
 ```
 
 `npm run check-ui` drives an already-installed Edge or Chrome through
