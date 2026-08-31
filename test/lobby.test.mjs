@@ -10,6 +10,9 @@ import assert from 'node:assert/strict';
 import {
   lobbyObjects,
   workshopObjects,
+  renderLobbyTile,
+  lobbyTilePhase,
+  LOBBY_TILE_PHASES,
   daySeed,
   LOBBY_SPAN,
   LOGO_SIZE,
@@ -226,5 +229,41 @@ test('체험관 물건이 로비 경계 안에 있다', () => {
     const half = object.size / 2;
     assert.ok(object.x - half >= 0 && object.x + half <= Number(LOBBY_SPAN));
     assert.ok(object.y - half >= 0 && object.y + half <= Number(LOBBY_SPAN));
+  }
+});
+
+// ── 바닥 ─────────────────────────────────────────────────────────────────
+
+test('로비 바닥의 서로 다른 그림이 여덟 장뿐이다', () => {
+  // 이 수가 캐시 키를 정한다(stage.keyOf). 늘어나면 로비가 다시 900칸을 따로
+  // 그리고 입장이 7초가 된다. 그래서 세어 둔다.
+  const seen = new Map();
+  for (let y = 0n; y < 24n; y++) {
+    for (let x = 0n; x < 24n; x++) {
+      const tile = renderLobbyTile(x, y);
+      // 픽셀 전체를 열쇠로 쓰면 비싸다. 앞쪽 한 줄이면 위상을 가른다.
+      const head = tile.slice(0, 4096).join(',');
+      const phase = lobbyTilePhase(x, y);
+      const known = seen.get(head);
+      if (known === undefined) seen.set(head, phase);
+      else assert.equal(known, phase, `같은 그림에 다른 위상(${x},${y})`);
+    }
+  }
+  assert.equal(seen.size, LOBBY_TILE_PHASES, `${seen.size}장이다`);
+});
+
+test('위상이 같으면 픽셀도 같다', () => {
+  // stage 가 이 성질을 믿고 캐시를 위상으로 묶는다. 깨지면 이웃 칸이 남의
+  // 무늬를 쓰게 된다.
+  const pairs = [];
+  for (let x = 0n; x < 40n && pairs.length < 6; x++) {
+    for (let y = 0n; y < 40n && pairs.length < 6; y++) {
+      if (lobbyTilePhase(x, y) === 3) pairs.push([x, y]);
+    }
+  }
+  assert.ok(pairs.length >= 2, '견줄 칸을 못 찾았다');
+  const first = renderLobbyTile(pairs[0][0], pairs[0][1]);
+  for (const [x, y] of pairs.slice(1)) {
+    assert.deepEqual(renderLobbyTile(x, y), first, `(${x},${y}) 가 다르다`);
   }
 });

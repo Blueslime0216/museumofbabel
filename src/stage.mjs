@@ -11,6 +11,8 @@
 //   어떻게 가져오는가 (tiles) · 어디를 보는가 (camera)
 
 import { worldToScreen } from './camera.mjs';
+import { isLobbyTier } from './codec.mjs';
+import { lobbyTilePhase } from './lobby.mjs';
 
 /** 전시물 사이의 벽. 한 변에 대한 비율. */
 const GAP = 0.06;
@@ -206,6 +208,15 @@ export function createStage({ canvas, camera, tiles, zoomBudgetFor = null, wall 
    * 자리를 옮길 때는 커튼 뒤에서 어차피 다시 그리므로 값이 크지 않다.
    */
   function keyOf(i, j) {
+    // 로비 바닥은 서로 다른 그림이 여덟 장뿐이다(lobby.mjs 의 위상). 칸마다 다른
+    // 키를 주면 화면의 900칸을 따로 그리고, 캐시가 180장이라 프레임마다 밀어내고
+    // 다시 그린다. 실측 로비 입장 6.96초 · 타일 6,828장 밀려남.
+    //
+    // 같은 위상이면 픽셀이 **완전히 같다.** 그래서 키를 위상으로 묶는다.
+    if (isLobbyTier(world.tier)) {
+      const [x, y] = coordOf(i, j);
+      return `L@${worldId}:${lobbyTilePhase(x, y)}`;
+    }
     return `${world.tier}@${worldId}:${i}:${j}`;
   }
 

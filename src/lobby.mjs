@@ -58,11 +58,32 @@ export const LOBBY_WALL = `rgb(${WALL[0]}, ${WALL[1]}, ${WALL[2]})`;
  * 무늬가 아주 약해야 한다. 로비는 볼 것이 아니라 지나갈 곳이고, 여기에 눈이
  * 머물면 작품 층으로 갈 이유가 줄어든다.
  */
+/**
+ * 서로 다른 로비 칸의 개수.
+ *
+ * 로비 바닥의 그림은 위상 하나로만 정해진다. 그래서 64x64=4,096칸이 있어도
+ * **실제로 다른 그림은 여덟 장뿐이다.**
+ *
+ * 이 사실이 성능에 결정적이다. stage 가 칸마다 다른 캐시 키를 주면 화면에 보이는
+ * 900칸을 따로 그리고, 타일 캐시가 180장이라 프레임마다 밀어내고 다시 그린다.
+ * 실측: 로비 입장 6.96초(작품 층은 0.96초), 타일 6,828장 밀려남. 여덟 장으로
+ * 묶으면 그 일이 사라진다.
+ *
+ * 검사가 실제로 그려 보고 여덟 장인지 센다. 무늬를 고쳐 위상이 늘어나면 그
+ * 검사가 먼저 깨진다.
+ */
+export const LOBBY_TILE_PHASES = 8;
+
+/** 좌표 → 바닥 무늬의 위상. 이것이 같으면 같은 그림이다. */
+export function lobbyTilePhase(x, y) {
+  return Number(((x * 7n) ^ (y * 13n)) & BigInt(LOBBY_TILE_PHASES - 1));
+}
+
 export function renderLobbyTile(x, y, rgba) {
   const target = rgba ?? new Uint8ClampedArray(CANVAS * CANVAS * 4);
 
   // 칸마다 결의 위상을 바꾼다. 좌표에서 직접 뽑으므로 저장할 것이 없다.
-  const phase = Number(((x * 7n) ^ (y * 13n)) & 7n);
+  const phase = lobbyTilePhase(x, y);
   // 격자선을 그릴 자리. 칸 경계가 보여야 "바닥"으로 읽힌다.
   const edge = 2;
 

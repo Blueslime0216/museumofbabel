@@ -16,10 +16,10 @@ npm run dev         # Vite dev server
 npm run build       # verifies vendored codec hashes, then builds to dist/
 npm run preview     # serve the build on :4173
 
-npm test            # 143 unit tests
+npm test            # 145 unit tests
 npm run check       # tests + function checks + codec hash verification
 npm run check-api   # 45 checks; calls the serverless handlers directly
-npm run check-ui    # 200 checks; requires `npm run preview` running first
+npm run check-ui    # 202 checks; requires `npm run preview` running first
 npm run sync-codec  # copy the codec in from its own tree and rewrite the manifest
 ```
 

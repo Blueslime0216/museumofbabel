@@ -1270,11 +1270,15 @@ for (const size of ['mobile', 'desktop']) {
         title: document.getElementById('plaque-title').textContent,
         copy: document.querySelector('#btn-copy')?.textContent ?? '',
       }));
+      // 연작 번호(II~IX)는 어느 언어에서도 로마 숫자다. 번역하지 않기로 정했고
+      // (label.mjs), 그러므로 "로마 글자가 남았다" 를 볼 때 꼬리는 떼야 한다.
+      // 떼지 않으면 여덟 번에 한 번 뽑히는 연작 그림에서 검사가 흔들린다.
+      const bare = state.title.replace(/\s+[IVX]+$/, '');
       check(
         `${code} 로 바꾸면 제목까지 그 언어가 된다`,
         state.lang === code &&
-          script.test(state.title) &&
-          !/[A-Za-z]/.test(state.title) &&
+          script.test(bare) &&
+          !/[A-Za-z]/.test(bare) &&
           script.test(state.copy),
         `lang=${state.lang} · ${state.title} · ${state.copy}`,
       );
@@ -1621,6 +1625,21 @@ for (const size of ['mobile', 'desktop']) {
 {
   const page = await openPage('desktop', { lobby: true });
   await settled(page);
+
+  // 로비 바닥은 여덟 장뿐이다.
+  //
+  // 한때 칸마다 다른 캐시 키를 줘서 화면의 900칸을 따로 그렸다. 캐시가 180장이라
+  // 프레임마다 밀어내고 다시 그렸고, 로비 입장이 6.96초였다(작품 층 0.96초).
+  // 시간은 기계마다 다르지만 **밀려난 개수**는 성질이므로 그것을 본다.
+  {
+    const tiles = await page.evaluate(() => window.__museum.tiles);
+    check('로비에 들어와도 타일이 밀려나지 않는다', tiles.evicted === 0, `${tiles.evicted}장 밀려남`);
+    check(
+      '로비 바닥을 여덟 장으로 그린다',
+      tiles.size <= 16,
+      `캐시 ${tiles.size}장 · 그린 ${tiles.rendered}장`,
+    );
+  }
 
   // 주소 없이 들어오면 로비 가운데다
   {
