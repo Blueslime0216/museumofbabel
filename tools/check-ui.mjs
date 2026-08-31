@@ -2356,6 +2356,53 @@ for (const size of ['mobile', 'desktop']) {
     await page.waitForTimeout(300);
   }
 
+  // ── 5.13a 시트의 좌표를 펼 수 있다 ────────────────────────────────────
+  //
+  // 좌표는 그 그림이 어디 있는지를 말하는 유일한 값이다. 줄인 것만 보여 주면
+  // 미술관이 그 값을 숨기는 것이 된다. 층 32의 한 축은 36진법으로 2,000자가 넘어
+  // 줄여 두는 것은 맞지만, 펼 수 있어야 한다.
+  {
+    await page.evaluate(() => window.__museum.jumpRandom(16));
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    await page.waitForTimeout(300);
+    await page.mouse.click(640, 430);
+    await page.waitForTimeout(700);
+
+    const rows = await page.locator('#record .reveal');
+    const count = await rows.count();
+    check('좌표 두 축이 펼 수 있는 값이다', count === 2, `${count}개`);
+
+    const before = (await rows.first().textContent()) ?? '';
+    await rows.first().click();
+    await page.waitForTimeout(200);
+    const after = (await rows.first().textContent()) ?? '';
+    check('누르면 좌표가 전체로 늘어난다', after.length > before.length, `${before.length}자 → ${after.length}자`);
+    check('줄인 값에는 줄임표가 있었다', before.includes('…') || before.length < after.length, before);
+    // 실제 좌표와 같은지 본다. 다른 값을 펴 보여 주면 더 나쁘다.
+    const same = await page.evaluate(full => {
+      const x = BigInt(window.__museum.state.x);
+      // 36진법으로 적은 것과 견준다.
+      let digits = '';
+      let value = x;
+      if (value === 0n) digits = '0';
+      while (value > 0n) {
+        digits = '0123456789abcdefghijklmnopqrstuvwxyz'[Number(value % 36n)] + digits;
+        value /= 36n;
+      }
+      return digits === full.trim();
+    }, after);
+    check('펼친 값이 정말 그 좌표다', same, after.slice(0, 24));
+
+    await rows.first().click();
+    await page.waitForTimeout(200);
+    const closed = (await rows.first().textContent()) ?? '';
+    check('다시 누르면 접힌다', closed.length === before.length, `${closed.length}자`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+  }
+
   // ── 5.13b 로비에서도 웹의 규칙을 지킨다 ────────────────────────────────
   //
   // 캔버스에는 링크가 없다. 그래서 Ctrl+클릭과 가운데 버튼의 뜻을 우리가 지킨다.

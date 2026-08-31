@@ -32,6 +32,7 @@ export default {
   "sheet.medium": "混合基数アドレス {bytes}バイト",
   "sheet.accession": "収蔵番号 {id}",
   "sheet.owner": "バベルの美術館 常設収蔵品",
+  "sheet.revealAxis": "{axis} 座標をすべて表示",
   "sheet.address": "アドレス",
   "sheet.expand": "押して全体を見る",
   "sheet.record": "記録",

@@ -310,3 +310,29 @@
     max-width: 300px;
   }
 }
+
+/* 펼 수 있는 값(좌표). 눌리는 것이므로 단추이지만 딸림표의 글씨를 그대로 쓴다. */
+.reveal {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: right;
+  cursor: pointer;
+  /* 접힌 상태에서는 한 줄, 펴면 줄이 넘어간다. 좌표는 2,000자가 넘을 수 있다. */
+  max-width: 100%;
+  word-break: break-all;
+  /* 눌리는 것이라고 알린다. 밑줄이 딸림표의 다른 값과 구분해 준다. */
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.reveal[data-open='1'] {
+  text-align: left;
+  text-decoration: none;
+}
+.reveal:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}

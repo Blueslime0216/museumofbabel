@@ -109,15 +109,36 @@ export function createSheet({ toast, onShow }) {
       [t('sheet.addressSize'), `${info.bytes} B · ${info.bits} bit`],
       [t('sheet.quantization'), `${info.quant} / 15`],
       [t('sheet.palette'), `${info.palette.primary} · ${info.palette.secondary}`],
-      ['x', shortenNumber(toBase36(artwork.x), 7, 5)],
-      ['y', shortenNumber(toBase36(artwork.y), 7, 5)],
+      // 좌표는 줄여 보여 주고, 눌러서 전체를 펼 수 있다.
+      //
+      // 줄이는 이유: 층 32의 한 축이 36진법으로 2,000자가 넘는다. 그대로 두면
+      // 딸림표가 좌표 두 줄짜리 벽이 된다.
+      //
+      // 그래도 펼 수 있어야 한다. 이것은 그 그림이 어디 있는지를 말하는 유일한
+      // 값이고, 줄인 것만 보여 주면 미술관이 그 값을 숨기는 것이 된다.
+      ['x', shortenNumber(toBase36(artwork.x), 7, 5), toBase36(artwork.x)],
+      ['y', shortenNumber(toBase36(artwork.y), 7, 5), toBase36(artwork.y)],
     ];
     $('record').replaceChildren(
-      ...rows.flatMap(([key, value]) => {
+      ...rows.flatMap(([key, value, full]) => {
         const dt = document.createElement('dt');
         dt.textContent = key;
         const dd = document.createElement('dd');
-        dd.textContent = value;
+        if (full && full !== value) {
+          // 펼 수 있는 값. 단추로 둔다 — 키보드로도 펼 수 있어야 한다.
+          const toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'reveal';
+          toggle.dataset.open = '0';
+          toggle.dataset.short = value;
+          toggle.dataset.full = full;
+          toggle.textContent = value;
+          toggle.setAttribute('aria-expanded', 'false');
+          toggle.setAttribute('aria-label', t('sheet.revealAxis', { axis: key }));
+          dd.append(toggle);
+        } else {
+          dd.textContent = value;
+        }
         return [dt, dd];
       }),
     );
@@ -195,6 +216,16 @@ export function createSheet({ toast, onShow }) {
   $('address').addEventListener('click', event => {
     const element = event.currentTarget;
     element.dataset.open = element.dataset.open === '1' ? '0' : '1';
+  });
+
+  // 좌표를 펴고 접는다. 목록을 다시 지어도 붙어 있게 위임으로 받는다.
+  $('record').addEventListener('click', event => {
+    const toggle = event.target.closest('.reveal');
+    if (!toggle) return;
+    const open = toggle.dataset.open === '1';
+    toggle.dataset.open = open ? '0' : '1';
+    toggle.textContent = open ? toggle.dataset.short : toggle.dataset.full;
+    toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
   });
 
   // ── 복사 ───────────────────────────────────────────────────────────────

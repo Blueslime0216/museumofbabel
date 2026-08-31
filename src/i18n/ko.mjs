@@ -29,6 +29,7 @@ export default {
   "sheet.medium": "혼합진법 주소 {bytes}바이트",
   "sheet.accession": "소장품 번호 {id}",
   "sheet.owner": "바벨의 미술관 상설 소장품",
+  "sheet.revealAxis": "{axis} 좌표 전체 보기",
   "sheet.address": "주소",
   "sheet.expand": "눌러서 전체 보기",
   "sheet.record": "기록",

@@ -33,6 +33,7 @@ export default {
   "sheet.medium": "Адрес в смешанной системе счисления, {bytes} байт",
   "sheet.accession": "Инв. № {id}",
   "sheet.owner": "Вавилонский музей, постоянное собрание",
+  "sheet.revealAxis": "Показать координату {axis} полностью",
   "sheet.address": "Адрес",
   "sheet.expand": "нажмите, чтобы раскрыть",
   "sheet.record": "Запись",

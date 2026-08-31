@@ -29,6 +29,7 @@ export default {
   "sheet.medium": "Mixed-radix address, {bytes} bytes",
   "sheet.accession": "Acc. no. {id}",
   "sheet.owner": "Museum of Babel, permanent collection",
+  "sheet.revealAxis": "Show the whole {axis} coordinate",
   "sheet.address": "Address",
   "sheet.expand": "tap to expand",
   "sheet.record": "Record",

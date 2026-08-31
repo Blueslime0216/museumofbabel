@@ -32,6 +32,7 @@ export default {
   "sheet.medium": "混合基数地址 {bytes}字节",
   "sheet.accession": "藏品编号 {id}",
   "sheet.owner": "巴别美术馆 常设藏品",
+  "sheet.revealAxis": "显示完整的 {axis} 坐标",
   "sheet.address": "地址",
   "sheet.expand": "点击展开",
   "sheet.record": "记录",
