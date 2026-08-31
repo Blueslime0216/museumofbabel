@@ -75,6 +75,10 @@
 
     <!-- 포커스가 옮겨질 때 작품 라벨을 읽어 준다. 캔버스라 이것이 유일한 길이다. -->
     <p class="sr-only" id="announcer" aria-live="polite" aria-atomic="true"></p>
+    <!-- 여덟 방향 건너뛰기. 고른 그림 뒤에서 나온다.
+         단추는 js 가 채운다(방향 표가 src/jump.mjs 에 있다). 자리는 고른 그림의
+         화면 좌표를 따라가므로 프레임마다 js 가 옮긴다. -->
+    <div class="jumps" id="jumps" hidden></div>
 
     <!-- 상시 비네트. 전시장 조명의 느낌이며 개방의 끝점을 자연스럽게 만든다. -->
     <div class="vignette" aria-hidden="true"></div>

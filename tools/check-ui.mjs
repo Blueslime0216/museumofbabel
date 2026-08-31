@@ -2356,6 +2356,106 @@ for (const size of ['mobile', 'desktop']) {
     await page.waitForTimeout(300);
   }
 
+  // ── 5.12a 여덟 방향 건너뛰기 ──────────────────────────────────────────
+  //
+  // 고른 그림 뒤에서 단추 여덟 개가 나오고, 누르면 그 방향으로 1,000걸음 간다.
+  // 좌표 셈은 단위 검사가 붙들고 있으므로, 여기서는 **화면에서 실제로 그 방향으로
+  // 그만큼 옮겨 가는지**를 본다.
+  {
+    await page.evaluate(() => window.__museum.jumpRandom(8));
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    await page.waitForTimeout(300);
+
+    const hiddenBefore = await page.evaluate(() => document.getElementById('jumps').hidden);
+    check('고르기 전에는 건너뛰기 단추가 없다', hiddenBefore === true);
+
+    await page.mouse.click(640, 430);
+    await page.waitForTimeout(800);
+
+    const ring = await page.evaluate(() => {
+      const box = document.getElementById('jumps');
+      const buttons = [...box.children];
+      const rect = () => box.getBoundingClientRect();
+      return {
+        shown: !box.hidden,
+        open: box.dataset.open,
+        count: buttons.length,
+        labels: buttons.map(button => button.getAttribute('aria-label') ?? ''),
+        // 단추가 실제로 놓인 자리. 컨테이너가 고른 그림 위에 있고 단추는 그
+        // 주위로 흩어져야 한다.
+        spots: buttons.map(button => {
+          const at = button.getBoundingClientRect();
+          return { x: Math.round(at.x + at.width / 2), y: Math.round(at.y + at.height / 2) };
+        }),
+        centre: { x: Math.round(rect().x), y: Math.round(rect().y) },
+      };
+    });
+
+    check('고르면 단추 여덟 개가 나온다', ring.shown && ring.count === 8, `${ring.count}개`);
+    check('단추가 펴진 상태다', ring.open === '1', ring.open);
+    check(
+      '단추마다 방향과 거리를 읽어 준다',
+      ring.labels.every(label => label.includes('1,000')),
+      ring.labels[0] ?? '없다',
+    );
+    // 여덟 자리가 서로 달라야 한다. 겹치면 아직 그림 뒤에 있는 것이다.
+    check(
+      '여덟 단추가 서로 다른 자리에 있다',
+      new Set(ring.spots.map(spot => `${spot.x},${spot.y}`)).size === 8,
+      JSON.stringify(ring.spots[0]),
+    );
+    // 그림을 가리지 않는다. 모두 가운데에서 떨어져 있어야 한다.
+    const away = ring.spots.every(
+      spot => Math.hypot(spot.x - ring.centre.x, spot.y - ring.centre.y) > 40,
+    );
+    check('단추가 그림 위에 겹치지 않는다', away);
+
+    // 오른쪽 단추를 누른다. 1,000칸 오른쪽으로 가야 한다.
+    const before = await page.evaluate(() => window.__museum.state.x);
+    await page.locator('.jump[data-dir="right"]').click();
+    // 전환이 끝나기를 기다린다. 커튼이 아니라 스와이프이므로 body 의 표식을 본다.
+    await page.waitForFunction(() => document.body.dataset.swipe === undefined, null, {
+      timeout: 20000,
+    });
+    await page.waitForTimeout(200);
+    const after = await page.evaluate(() => window.__museum.state.x);
+    check(
+      '오른쪽 단추가 오른쪽으로 1,000걸음 옮긴다',
+      BigInt(after) - BigInt(before) === 1000n,
+      `${BigInt(after) - BigInt(before)}걸음`,
+    );
+
+    // 전환이 끝나면 화면이 제자리에 돌아와 있어야 한다. 밀린 채로 남으면
+    // 그 뒤의 모든 누름이 어긋난다.
+    const rested = await page.evaluate(() => {
+      const style = getComputedStyle(document.getElementById('stage'));
+      return { transform: style.transform, filter: style.filter };
+    });
+    check(
+      '전환이 끝나면 화면이 제자리다',
+      (rested.transform === 'none' || rested.transform === 'matrix(1, 0, 0, 1, 0, 0)') &&
+        (rested.filter === 'none' || rested.filter === 'blur(0px) brightness(1)'),
+      `${rested.transform} · ${rested.filter}`,
+    );
+    check('옮긴 뒤에는 단추가 사라진다', await page.evaluate(() => document.getElementById('jumps').hidden));
+
+    // 로비에는 없다. 64칸짜리 방에서 1,000걸음은 뜻이 없다.
+    await page.evaluate(() => window.__museum.jumpRandom(0));
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    await page.waitForTimeout(300);
+    const inLobby = await page.evaluate(() => {
+      const centre = [window.innerWidth / 2, window.innerHeight / 2];
+      // 로비에서 아무 데나 눌러 본다(표지 위여도 시트는 열리지 않는다).
+      window.__museum.focusCell?.(Math.round(window.__museum.camera.x), Math.round(window.__museum.camera.y));
+      return document.getElementById('jumps').hidden;
+    });
+    check('로비에서는 건너뛰기 단추가 나오지 않는다', inLobby === true);
+  }
+
   // ── 5.13a 시트의 좌표를 펼 수 있다 ────────────────────────────────────
   //
   // 좌표는 그 그림이 어디 있는지를 말하는 유일한 값이다. 줄인 것만 보여 주면

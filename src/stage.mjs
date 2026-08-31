@@ -531,6 +531,16 @@ export function createStage({ canvas, camera, tiles, zoomBudgetFor = null, wall 
       ];
     },
 
+    /**
+     * 셀 번호 → 화면 좌표. cellAt 의 반대다.
+     *
+     * 캔버스 위에 DOM 을 얹는 쪽이 쓴다(건너뛰기 단추). 그리기는 이 함수를 쓰지
+     * 않는다 — 그쪽은 이미 worldToScreen 을 직접 부른다.
+     */
+    screenOf(i, j) {
+      return worldToScreen(camera, i, j, view.width, view.height);
+    },
+
     coordOf,
     keyOf,
 

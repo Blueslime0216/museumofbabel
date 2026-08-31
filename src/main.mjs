@@ -42,6 +42,7 @@ import { createLanguagePicker } from './ui/language.mjs';
 import { createFloorPicker } from './ui/floor.mjs';
 import { createMinimap } from './ui/minimap.mjs';
 import { createPamphlet } from './ui/pamphlet.mjs';
+import { JUMP_DIRECTIONS, JUMP_STEPS, jumpTarget } from './jump.mjs';
 import { LOBBY_TIER } from './codec.mjs';
 import { applyStaticText, onLanguageChange, t } from './i18n/index.mjs';
 import { attachDebug } from './ui/debug.mjs';
@@ -353,6 +354,139 @@ async function prepareLobby() {
   stage.setLobbyObjects(objects);
 }
 
+// ── 여덟 방향 건너뛰기 ───────────────────────────────────────────────────
+//
+// 방향 표와 좌표 셈은 `src/jump.mjs` 에 있다. 여기는 단추를 놓고 전환을 몬다.
+
+const jumps = document.getElementById('jumps');
+
+/** 건너뛰는 중인가. 그 사이에는 손을 받지 않는다. */
+let swiping = false;
+
+// 단추 여덟 개를 한 번만 만든다. 고를 때마다 다시 만들면 나오는 모션이 매번
+// 처음부터 시작하지 못한다(붙자마자 전환이 걸리지 않는다).
+for (const direction of JUMP_DIRECTIONS) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'jump';
+  button.dataset.dir = direction.id;
+  button.style.setProperty('--dx', String(direction.dx));
+  button.style.setProperty('--dy', String(direction.dy));
+  button.textContent = direction.arrow;
+  button.addEventListener('click', () => jumpBy(direction));
+  jumps.append(button);
+}
+
+/** 단추의 읽어 줄 이름. 화살표만으로는 어디로 얼마나 가는지 알 수 없다. */
+function labelJumps() {
+  for (const button of jumps.children) {
+    button.setAttribute(
+      'aria-label',
+      t(`jump.${button.dataset.dir}`, { steps: JUMP_STEPS.toLocaleString('en-US') }),
+    );
+    button.title = button.getAttribute('aria-label');
+  }
+}
+labelJumps();
+onLanguageChange(labelJumps);
+
+/**
+ * 단추를 고른 그림 주위에 놓는다.
+ *
+ * 프레임 루프에서 부른다. 카메라가 그 그림으로 부드럽게 옮겨 가는 동안 그림의
+ * 화면 좌표가 바뀌므로, 몇 프레임 동안은 따라가야 한다.
+ *
+ * 반경은 그림의 반쯤 밖이다. 그림 위에 겹치면 그림을 가리고, 너무 멀면 그 그림의
+ * 것으로 읽히지 않는다.
+ */
+function placeJumps() {
+  const focus = stage.focus;
+  if (!focus || jumps.hidden) return;
+  const [sx, sy] = stage.screenOf(focus.i, focus.j);
+  jumps.style.setProperty('--jump-x', `${Math.round(sx)}px`);
+  jumps.style.setProperty('--jump-y', `${Math.round(sy)}px`);
+  // 그림의 반(0.47) + 단추의 반(17px) + 숨 쉴 틈
+  const reach = Math.max(46, camera.zoom * 0.47 + 26);
+  jumps.style.setProperty('--reach', `${Math.round(reach)}px`);
+}
+
+function showJumps() {
+  // 로비에는 작품이 없고 건너뛸 방향도 없다. 로비는 64칸이라 1,000걸음이 뜻이 없다.
+  if (isLobbyTier(state.tier)) return;
+  jumps.hidden = false;
+  jumps.dataset.open = '0';
+  placeJumps();
+  // 접힌 상태로 붙이고 다음 프레임에 펴야 전환이 돈다. 같은 프레임에 두 상태를
+  // 주면 브라우저가 하나로 합친다(팜플렛과 같은 이유).
+  requestAnimationFrame(() => {
+    if (!jumps.hidden) jumps.dataset.open = '1';
+  });
+}
+
+function hideJumps() {
+  if (jumps.hidden) return;
+  jumps.dataset.open = '0';
+  jumps.hidden = true;
+}
+
+/** 다음 프레임까지. 전환을 걸기 전에 브라우저가 지금 상태를 보게 한다. */
+const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * 그 방향으로 1,000걸음.
+ *
+ * 전환은 세 걸음이다. 그 방향으로 밀리며 흐려지고, 다 가려진 사이에 자리를
+ * 갈아 끼우고, 반대쪽에서 들어와 멈춘다. 커튼(암전 → 개방)을 쓰지 않는 이유는
+ * 방향이다 — 커튼은 어디로 가는지 말해 주지 않는다.
+ *
+ * 가려진 사이에 타일을 준비한다(preheat). 그러지 않으면 들어오는 화면에 빈 칸이
+ * 남고, 그것이 "끊겼다" 로 읽힌다. 준비가 오래 걸리면 흐린 화면이 조금 더 머문다 —
+ * 멈춘 것처럼 보이는 것보다 낫다.
+ */
+async function jumpBy(direction) {
+  if (swiping || curtain.busy || isLobbyTier(state.tier)) return;
+  swiping = true;
+  // 고른 것을 놓는다. 시트를 열어 둔 채로 옮기면 도착한 화면 위에 **떠나온 작품의
+  // 정보**가 남는다. 딸림표가 거짓말을 하게 된다.
+  clearFocus();
+
+  const axisBits = axisBitsFor(state.tier);
+  const middle = stage.coordOf(Math.round(camera.x), Math.round(camera.y));
+  const target = jumpTarget({ x: middle[0], y: middle[1] }, direction, axisBits);
+
+  // 밀려나는 거리. **화면을 벗어나게 밀면 안 된다** — 캔버스가 빠져나간 자리에
+  // 빈 배경이 드러나고, 그러면 흐려지는 세계가 아니라 판이 끌려 나가는 것으로
+  // 보인다. 조금만 밀고 CSS 가 1.08배로 키운다(테두리가 화면에 들어오지 않는다).
+  const push = Math.min(stage.view.width, stage.view.height) * 0.12;
+  document.body.style.setProperty('--swipe-x', `${-direction.dx * push}px`);
+  document.body.style.setProperty('--swipe-y', `${-direction.dy * push}px`);
+
+  document.body.dataset.swipe = 'out';
+  await wait(reducedMotion ? 130 : 210);
+
+  // 다 가려졌다. 여기서 갈아 끼운다.
+  document.body.dataset.swipe = 'hold';
+  state = { ...state, ...target };
+  applyWorld();
+  camera.forceZoom(restZoom);
+  hash.set(state);
+  hash.flush();
+  const missing = await stage.preheat({ zoom: restZoom });
+  if (missing > 0) await wait(60); // 몇 장이 늦었다. 잠깐 더 가려 둔다
+  dirty = true;
+
+  // 반대쪽으로 옮겨 두고(전환 없음), 다음 프레임에 제자리로 놓는다.
+  document.body.dataset.swipe = 'in';
+  await nextFrame();
+  document.body.dataset.swipe = 'rest';
+  await wait(reducedMotion ? 140 : 380);
+
+  delete document.body.dataset.swipe;
+  swiping = false;
+  dirty = true;
+}
+
 /**
  * 로비의 물건을 눌렀다.
  *
@@ -511,6 +645,7 @@ function focusCell(i, j, { reading = false } = {}) {
   stage.setDim(1);
   if (reading && camera.target.zoom < READING_CELL) camera.zoomTo(READING_CELL);
   openSheetAt(i, j);
+  showJumps();
   dirty = true;
 }
 
@@ -521,6 +656,7 @@ function focusCell(i, j, { reading = false } = {}) {
  * 제목 줄이 남아 있으면 화면이 거짓말을 한다.
  */
 function clearFocus() {
+  hideJumps();
   if (!stage.focus && !sheet.open) return;
   stage.setFocus(null);
   stage.setDim(0);
@@ -535,7 +671,9 @@ const input = createInput({
   element: canvas,
   camera,
   stage,
-  isBlocked: () => curtain.busy,
+  // 건너뛰는 동안에도 손을 받지 않는다. 화면이 밀리는 중에 끌면 두 움직임이
+  // 겹쳐서 어디로 가는지 알 수 없게 된다.
+  isBlocked: () => curtain.busy || swiping,
   onTap: (i, j, screenX, screenY, keys = {}) => {
     keyboardMode = false;
     document.body.dataset.keyboard = '0';
@@ -809,6 +947,10 @@ function frame(now) {
     const missing = stage.draw({ prefetch });
     dirty = missing > 0 || !camera.settled;
   }
+
+  // 건너뛰기 단추는 고른 그림을 따라다닌다. 카메라가 그 그림으로 옮겨 가는
+  // 동안 화면 좌표가 바뀌므로, 카메라가 멈추기 전까지 자리를 다시 잡는다.
+  if (!jumps.hidden && !camera.settled) placeJumps();
 
   // 중앙 칸이 바뀔 때만 URL 을 건드린다. 층 16 의 좌표는 3212비트여서
   // 프레임마다 만들면 그것만으로 예산을 먹는다.

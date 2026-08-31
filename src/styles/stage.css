@@ -78,3 +78,182 @@
     #000 var(--open-outer, 0%)
   );
 }
+
+/* ── 여덟 방향 건너뛰기 ───────────────────────────────────────────────────
+
+   고른 그림 뒤에서 여덟 개의 단추가 나온다.
+
+   캔버스 위에 DOM 으로 얹는다. 캔버스에 직접 그리면 눌리는 자리와 초점과 읽어
+   주는 이름을 전부 다시 만들어야 하고, 그것은 브라우저가 이미 하는 일이다.
+
+   자리는 js 가 정한다(--jump-x · --jump-y). 고른 그림의 화면 좌표를 따라가야
+   하는데 카메라가 그 그림으로 부드럽게 옮겨 가므로, 몇 프레임 동안 움직인다.
+   컨테이너 하나만 옮기고 단추 여덟 개는 그 안에서 상대 위치로 둔다 — 프레임마다
+   여덟 번 쓰는 것과 한 번 쓰는 것의 차이다. */
+.jumps {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  /* 조작 단추(overlay, z-index 10)보다 위, 모달(40)보다 아래 */
+  z-index: 12;
+  transform: translate(var(--jump-x, 50vw), var(--jump-y, 50vh));
+  /* 빈 자리는 아래의 캔버스가 받는다. 단추만 입력을 받는다. */
+  pointer-events: none;
+}
+.jumps[hidden] {
+  display: none;
+}
+.jump {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  padding: 0;
+  border: 2px solid var(--on-pill);
+  border-radius: 50%;
+  background-image: var(--bg-pill);
+  background-size: 240px 240px;
+  background-position: center;
+  image-rendering: pixelated;
+  color: var(--on-pill);
+  font: 700 15px/1 var(--sans);
+  cursor: pointer;
+  pointer-events: auto;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.6px var(--edge-pill);
+  /* 대각선은 √2 배 멀리 놓인다. 그림이 네모라서 모서리가 실제로 더 멀다. */
+  transform: translate(calc(var(--dx) * var(--reach, 92px)), calc(var(--dy) * var(--reach, 92px)));
+  opacity: 1;
+  transition:
+    transform 320ms cubic-bezier(0.2, 1.25, 0.3, 1),
+    opacity 160ms ease;
+}
+/* 나오기 전: 그림 뒤에 겹쳐 있다. 여기서 펴져 나간다. */
+.jumps[data-open='0'] .jump {
+  transform: translate(0, 0) scale(0.35);
+  opacity: 0;
+}
+/* 한 장씩 나오는 시차. 위에서 시계 방향으로. */
+.jump:nth-child(1) {
+  transition-delay: 0ms;
+}
+.jump:nth-child(2) {
+  transition-delay: 16ms;
+}
+.jump:nth-child(3) {
+  transition-delay: 32ms;
+}
+.jump:nth-child(4) {
+  transition-delay: 48ms;
+}
+.jump:nth-child(5) {
+  transition-delay: 64ms;
+}
+.jump:nth-child(6) {
+  transition-delay: 80ms;
+}
+.jump:nth-child(7) {
+  transition-delay: 96ms;
+}
+.jump:nth-child(8) {
+  transition-delay: 112ms;
+}
+@media (hover: hover) {
+  .jump:hover {
+    filter: brightness(1.2);
+  }
+}
+.jump:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+.jump:active {
+  filter: invert(1);
+}
+
+/* ── 건너뛰는 전환 ────────────────────────────────────────────────────────
+
+   그 방향으로 밀리며 흐려지고, 다 흐려진 사이에 자리를 갈아 끼우고, 반대쪽에서
+   들어와 멈춘다. 커튼(암전 → 개방)을 쓰지 않는 이유는 방향이다 — 커튼은 어디로
+   가는지 말해 주지 않는다.
+
+   흐림은 CSS 필터다. 캔버스를 다시 그려서 번지게 하려면 프레임마다 여러 번
+   그려야 하고, 그것은 이 미술관이 낼 수 없는 값이다. 필터는 합성 단계에서
+   일어나므로 그리기 예산을 쓰지 않는다.
+
+   네 단계를 클래스로 둔 이유: 전환 중간에 자리를 바꿔야 하고(가려진 사이),
+   그 순간에는 전환이 걸려 있으면 안 된다. `in` 이 전환 없는 단계다. */
+body[data-swipe] .stage {
+  will-change: transform, filter;
+}
+/* 미는 거리를 작게 두고 함께 키운다.
+   처음에는 화면의 절반 넘게 밀었다. 그러자 캔버스가 빠져나간 자리에 **빈 배경이
+   드러나** 흐려지는 그림이 아니라 판이 끌려 나가는 것으로 보였다. 조금만 밀고
+   1.08배로 키우면 테두리가 화면에 들어오지 않고, 흐림이 그 움직임을 이어 준다. */
+body[data-swipe='out'] .stage {
+  transition:
+    transform 200ms cubic-bezier(0.4, 0, 1, 1),
+    filter 200ms ease-in;
+  transform: translate(var(--swipe-x), var(--swipe-y)) scale(1.08);
+  filter: blur(16px) brightness(0.7);
+}
+body[data-swipe='hold'] .stage {
+  transform: translate(var(--swipe-x), var(--swipe-y)) scale(1.08);
+  filter: blur(16px) brightness(0.7);
+}
+body[data-swipe='in'] .stage {
+  /* 반대쪽. 전환을 걸지 않는다 — 여기로 순간 이동해야 한다. */
+  transform: translate(calc(var(--swipe-x) * -1), calc(var(--swipe-y) * -1)) scale(1.08);
+  filter: blur(16px) brightness(0.7);
+}
+body[data-swipe='rest'] .stage {
+  transition:
+    transform 360ms cubic-bezier(0, 0, 0.2, 1),
+    filter 320ms ease-out;
+  transform: translate(0, 0) scale(1);
+  filter: blur(0) brightness(1);
+}
+/* UI 는 함께 밀지 않는다. 대신 물러난다 — 세계가 지나가는 동안 단추가 또렷하게
+   붙어 있으면 두 화면이 겹쳐 보인다. */
+body[data-swipe] .overlay,
+body[data-swipe] .vignette {
+  transition: opacity 180ms ease;
+  opacity: 0.25;
+}
+body[data-swipe='rest'] .overlay,
+body[data-swipe='rest'] .vignette {
+  opacity: 1;
+}
+/* 작은 화면에서는 흐림을 줄인다. 큰 반경의 필터가 오래된 휴대폰에서 비싸다. */
+@media (max-width: 560px) {
+  body[data-swipe='out'] .stage,
+  body[data-swipe='hold'] .stage,
+  body[data-swipe='in'] .stage {
+    filter: blur(9px) brightness(0.72);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 화면이 쏠리는 것이 어지러운 사람이 있다. 밀지 않고 어둡게만 지난다. */
+  body[data-swipe] .stage {
+    transition-duration: 120ms;
+    transform: none;
+  }
+  body[data-swipe='out'] .stage,
+  body[data-swipe='hold'] .stage,
+  body[data-swipe='in'] .stage {
+    filter: brightness(0.5);
+  }
+  .jumps[data-open='0'] .jump {
+    transform: translate(calc(var(--dx) * var(--reach, 92px)), calc(var(--dy) * var(--reach, 92px)));
+  }
+  .jump {
+    transition-duration: 1ms;
+    transition-delay: 0ms;
+  }
+}
