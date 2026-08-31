@@ -81,6 +81,8 @@ export default {
   "minimap.out": "看得更广",
   "minimap.in": "看得更近",
   "minimap.label": "周边地图 · 点按展开导览册",
+  "pamphlet.plan": "本层平面图 · 点按可放置标记",
+  "pamphlet.goHere": "要前往这个位置吗？",
   "pamphlet.here": "当前位置",
   "pamphlet.building": "馆内导览",
   "pamphlet.buildingNote": "每层画面的颗粒不同。前往所选楼层的新位置。",

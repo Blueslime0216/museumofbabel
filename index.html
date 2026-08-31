@@ -379,11 +379,24 @@
           <h2 class="modal-title" id="pamphlet-title" data-i18n="pamphlet.here">You are here</h2>
           <!-- 층 전체를 담은 네모. 내 자리를 점으로 찍는다. 미니맵과 달리
                내 위치를 가운데 두지 않는다 — 층 안에서의 자리를 보여야 한다. -->
-          <div class="fold-plan" id="pamphlet-plan">
+          <!-- 배경은 층 전체를 표본으로 뜬 축소도다. 단색으로 두면 평면도가
+               장식이 되지만, 층의 색을 담으면 정보가 된다. -->
+          <button class="fold-plan" id="pamphlet-plan" data-i18n-label="pamphlet.plan"
+                  aria-label="Plan of this floor. Press a spot to place a marker.">
+            <canvas id="pamphlet-thumb" aria-hidden="true"></canvas>
             <span class="fold-dot" id="pamphlet-dot"></span>
-          </div>
+            <!-- 웨이포인트. 누른 자리에 물방울 모양으로 선다. -->
+            <span class="fold-pin" id="pamphlet-pin" hidden></span>
+          </button>
           <p class="fold-line" id="pamphlet-floor"></p>
           <p class="modal-note" id="pamphlet-room"></p>
+          <!-- 고른 자리로 갈지 묻는다. 웨이포인트가 서면 나타난다. -->
+          <div class="fold-ask" id="pamphlet-ask" hidden>
+            <p class="modal-note" data-i18n="pamphlet.goHere">Travel to this spot?</p>
+            <div class="modal-actions">
+              <button class="btn btn-primary" id="pamphlet-go" data-i18n="common.go">Go</button>
+            </div>
+          </div>
         </section>
         <!-- 오른쪽 폭: 로비와 체험관 -->
         <section class="fold fold-right">

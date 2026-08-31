@@ -156,6 +156,51 @@ export const ROOM_TINTS = ROOMS.map((room, index) => {
 });
 
 /**
+ * 층 전체를 한 장으로 줄인 그림. 팜플렛의 평면도 배경이 이것이다.
+ *
+ * 미니맵과 다른 점: 미니맵은 내 주변을 보고, 이것은 **축 전체**를 본다. 층 32의
+ * 축은 2^12812 칸이므로 표본 사이의 걸음도 그만큼 큰 수다.
+ *
+ * 표본을 24x24 로 둔다. 576칸이고 층 32에서 43ms 다. 팜플렛은 눌러서 여는 것이라
+ * 한 번 낼 수 있는 값이고, 같은 층을 다시 열면 캐시에서 나온다.
+ *
+ * 단색으로 채우지 않은 이유: 층마다 색이 다르다는 것이 이 미술관의 사실이고,
+ * 평면도가 그 사실을 보여 주면 배경이 장식이 아니라 정보가 된다.
+ */
+export const THUMBNAIL_SAMPLES = 24;
+
+export function floorThumbnail({ tier, locality, samples = THUMBNAIL_SAMPLES, mode = 'colour' }) {
+  const rgba = new Uint8ClampedArray(samples * samples * 4);
+  if (isLobbyTier(tier)) return { samples, rgba, empty: true };
+
+  const spec = tierSpec(tier);
+  const mix = localityMix(locality, spec.axisBits);
+  const axis = 1n << BigInt(spec.axisBits);
+  // 표본 사이의 걸음. 축을 표본 수로 나눈다.
+  const stride = axis / BigInt(samples);
+  const rooms = mode === 'rooms';
+
+  let at = 0;
+  for (let row = 0; row < samples; row++) {
+    // 칸의 가운데를 본다. 모서리를 보면 층의 첫 줄만 계속 뽑힌다.
+    const y = stride * BigInt(row) + stride / 2n;
+    for (let column = 0; column < samples; column++) {
+      const x = stride * BigInt(column) + stride / 2n;
+      const tone = rooms
+        ? ROOM_TINTS[roomOf(x, y)]
+        : baseToneOf(coordinatesToCode(x, y, mix, spec.axisBits));
+      rgba[at] = tone.r;
+      rgba[at + 1] = tone.g;
+      rgba[at + 2] = tone.b;
+      rgba[at + 3] = 255;
+      at += 4;
+    }
+  }
+
+  return { samples, rgba, empty: false };
+}
+
+/**
  * 층 하나의 색을 기억하는 지도.
  *
  * 캐시가 있는 이유: 한 칸 옮기면 지도의 33x33 중 33칸만 새로 들어온다. 캐시가

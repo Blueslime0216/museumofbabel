@@ -1948,6 +1948,67 @@ for (const size of ['mobile', 'desktop']) {
     const current = open.floors.find(floor => floor.current);
     check('지금 층이 단면도에 표시된다', current?.tier === '8', JSON.stringify(current));
 
+    // 평면도의 배경. 비어 있으면 허전하고, 무엇보다 층이 어떤 색인지 알 수 없다.
+    const plan = await page.evaluate(() => {
+      const canvas = document.getElementById('pamphlet-thumb');
+      const { data } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+      const seen = new Set();
+      let painted = 0;
+      for (let at = 0; at < data.length; at += 4) {
+        if (data[at + 3] > 0) painted++;
+        seen.add((data[at] << 16) | (data[at + 1] << 8) | data[at + 2]);
+      }
+      return { colours: seen.size, painted, pixels: data.length / 4 };
+    });
+    check('평면도에 층의 축소도가 깔린다', plan.painted === plan.pixels, `${plan.painted}/${plan.pixels}`);
+    check('축소도가 여러 색이다', plan.colours >= 8, `${plan.colours}가지`);
+
+    // 평면도를 누르면 웨이포인트가 서고 갈지 묻는다.
+    {
+      const box = await page.locator('#pamphlet-plan').boundingBox();
+      const aim = { x: box.x + box.width * 0.25, y: box.y + box.height * 0.75 };
+      await page.mouse.click(aim.x, aim.y);
+      await page.waitForTimeout(250);
+      const marked = await page.evaluate(() => {
+        const pin = document.getElementById('pamphlet-pin');
+        return {
+          shown: !pin.hidden,
+          left: Number.parseFloat(pin.style.left),
+          top: Number.parseFloat(pin.style.top),
+          asking: !document.getElementById('pamphlet-ask').hidden,
+        };
+      });
+      check('평면도를 누르면 표시가 선다', marked.shown, JSON.stringify(marked));
+      check(
+        '표시가 누른 자리에 선다',
+        Math.abs(marked.left - 25) < 2 && Math.abs(marked.top - 75) < 2,
+        `${marked.left}% / ${marked.top}%`,
+      );
+      check('표시가 서면 갈지 묻는다', marked.asking);
+
+      // 확인을 누르면 그 자리로 간다. 다시 열어서 점이 그 자리에 있는지 본다.
+      await page.locator('#pamphlet-go').click();
+      await traveled(page);
+      await page.locator('#minimap-open').click();
+      await page.waitForTimeout(800);
+      const arrived = await page.evaluate(() => {
+        const dot = document.getElementById('pamphlet-dot');
+        return {
+          left: Number.parseFloat(dot.style.left),
+          top: Number.parseFloat(dot.style.top),
+          pin: !document.getElementById('pamphlet-pin').hidden,
+        };
+      });
+      // 한 점이 덮는 넓이가 어마어마하므로 그 점 안에 들어오면 맞는 것이다.
+      check(
+        '고른 자리로 옮겨 간다',
+        Math.abs(arrived.left - 25) < 3 && Math.abs(arrived.top - 75) < 3,
+        `${arrived.left}% / ${arrived.top}%`,
+      );
+      // 다시 열면 지난 표시는 없어야 한다. 그 사이에 걸어 다녔을 수 있다.
+      check('다시 열면 표시가 남아 있지 않다', arrived.pin === false);
+    }
+
     // 다른 층을 누르면 그 층의 무작위 자리로 간다.
     await page.locator('#pamphlet-floors button[data-tier="32"]').click();
     await traveled(page);

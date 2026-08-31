@@ -82,6 +82,8 @@ export default {
   "minimap.out": "Show more of the floor",
   "minimap.in": "Show less of the floor",
   "minimap.label": "Map of your surroundings. Press to open the pamphlet.",
+  "pamphlet.plan": "Plan of this floor. Press a spot to place a marker.",
+  "pamphlet.goHere": "Travel to this spot?",
   "pamphlet.here": "You are here",
   "pamphlet.building": "The building",
   "pamphlet.buildingNote": "Each floor has a different grain. You arrive somewhere new on the floor you pick.",

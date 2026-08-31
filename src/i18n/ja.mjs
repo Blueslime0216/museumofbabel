@@ -81,6 +81,8 @@ export default {
   "minimap.out": "広く見る",
   "minimap.in": "狭く見る",
   "minimap.label": "周辺の地図 · 押すとパンフレットが開きます",
+  "pamphlet.plan": "この階の平面図 · 押すと目印が立ちます",
+  "pamphlet.goHere": "この場所へ移動しますか？",
   "pamphlet.here": "現在の場所",
   "pamphlet.building": "館内のご案内",
   "pamphlet.buildingNote": "階ごとに絵の粒が違います。選んだ階の新しい場所から始まります。",

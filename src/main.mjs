@@ -177,6 +177,8 @@ const pamphlet = createPamphlet({
   onGoFloor: tier => jumpRandom(tier),
   onGoLobby: () => goto({ tier: LOBBY_TIER, ...lobbyHome(), workshop: false }),
   onGoWorkshop: () => goto({ tier: LOBBY_TIER, ...lobbyHome(), workshop: true }),
+  // 평면도에서 고른 자리로. 층은 그대로다 — 평면도가 지금 층의 것이다.
+  onGoSpot: spot => goto(spot),
 });
 
 const minimap = createMinimap({

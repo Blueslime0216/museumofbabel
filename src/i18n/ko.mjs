@@ -78,6 +78,8 @@ export default {
   "minimap.out": "더 넓게 보기",
   "minimap.in": "더 좁게 보기",
   "minimap.label": "주변 지도 · 눌러서 팜플렛 펼치기",
+  "pamphlet.plan": "이 층의 평면도 · 누르면 그 자리에 표시가 선다",
+  "pamphlet.goHere": "이곳으로 이동하시겠습니까?",
   "pamphlet.here": "지금 이 자리",
   "pamphlet.building": "미술관의 구조",
   "pamphlet.buildingNote": "층마다 그림의 결이 다릅니다. 고른 층의 새 자리에서 시작합니다.",
