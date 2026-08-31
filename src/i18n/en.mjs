@@ -76,6 +76,8 @@ export default {
   "lobby.today": "Picture of the day",
   "lobby.patron": "On loan from a patron",
   "lobby.workshop": "Workshop",
+  "minimap.label": "Map of your surroundings. Press to open the pamphlet.",
+  "toast.pamphletSoon": "The pamphlet is still being printed",
   "lobby.qr": "Make a QR code",
   "lobby.exit": "Back to the lobby",
   "toast.qrSoon": "The QR workshop is still being built",

@@ -95,6 +95,16 @@
         </svg>
       </button>
 
+      <!-- 미니맵. 좌상단. 지금 자리를 가운데 둔 지도이며, 누르면 팜플렛이 펼쳐진다.
+           캔버스 크기는 화면 배율에 맞춰 js 가 정한다. 여기서 주면 흐릿해진다. -->
+      <button
+        class="ui minimap"
+        id="minimap"
+        data-i18n-label="minimap.label"
+        aria-label="Map of your surroundings. Press to open the pamphlet."
+      >
+        <canvas aria-hidden="true"></canvas>
+      </button>
       <div class="ui controls" id="controls">
         <button
           class="pill"

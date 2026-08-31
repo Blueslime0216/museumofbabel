@@ -45,6 +45,46 @@
   right: var(--pad);
 }
 
+/* 미니맵. 좌상단. 언어 단추(우상단)와 조작 단추(우하단) 사이의 빈 곳이다.
+   가로세로가 같아야 지도의 축척이 두 축에서 같다. */
+.minimap {
+  position: absolute;
+  top: calc(var(--pad) + var(--safe-t));
+  left: var(--pad);
+  width: 132px;
+  height: 132px;
+  padding: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  /* 지도는 벽에 걸린 안내판이다. 액자처럼 얇은 테를 준다. */
+  border: 1px solid var(--edge-pill);
+  background: var(--wall);
+}
+.minimap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* 칸이 칸으로 보여야 한다. 보간하면 지도가 뭉갠다. */
+  image-rendering: pixelated;
+}
+/* 시트가 올라오면 지도는 물러난다. 작품을 보는 동안 지도는 방해다. */
+body[data-sheet='expanded'] .minimap {
+  opacity: 0;
+  pointer-events: none;
+}
+.minimap {
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+@media (max-width: 480px) {
+  .minimap {
+    width: 104px;
+    height: 104px;
+  }
+}
+
 .controls {
   position: absolute;
   right: var(--pad);

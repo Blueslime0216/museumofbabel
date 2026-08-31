@@ -72,6 +72,8 @@ export default {
   "lobby.today": "오늘의 그림",
   "lobby.patron": "후원자 대여작",
   "lobby.workshop": "체험관",
+  "minimap.label": "주변 지도 · 눌러서 팜플렛 펼치기",
+  "toast.pamphletSoon": "팜플렛은 아직 준비 중입니다",
   "lobby.qr": "QR 코드 만들어보기",
   "lobby.exit": "로비로 돌아가기",
   "toast.qrSoon": "QR 코드 공방은 아직 준비 중입니다",

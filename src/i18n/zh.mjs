@@ -75,6 +75,8 @@ export default {
   "lobby.today": "今日之画",
   "lobby.patron": "赞助者寄存",
   "lobby.workshop": "体验室",
+  "minimap.label": "周边地图 · 点按展开导览册",
+  "toast.pamphletSoon": "导览册还在筹备中",
   "lobby.qr": "制作二维码",
   "lobby.exit": "回到大厅",
   "toast.qrSoon": "二维码工坊还在筹备中",

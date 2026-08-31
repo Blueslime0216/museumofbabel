@@ -76,6 +76,8 @@ export default {
   "lobby.today": "Картина дня",
   "lobby.patron": "Из собрания покровителя",
   "lobby.workshop": "Мастерская",
+  "minimap.label": "Карта окрестностей. Нажмите, чтобы раскрыть буклет.",
+  "toast.pamphletSoon": "Буклет ещё готовится",
   "lobby.qr": "Сделать QR-код",
   "lobby.exit": "Вернуться в вестибюль",
   "toast.qrSoon": "Мастерская QR-кодов ещё готовится",

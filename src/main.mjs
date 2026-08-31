@@ -40,6 +40,7 @@ import { createHint } from './ui/hint.mjs';
 import { createSearch } from './ui/search.mjs';
 import { createLanguagePicker } from './ui/language.mjs';
 import { createFloorPicker } from './ui/floor.mjs';
+import { createMinimap } from './ui/minimap.mjs';
 import { applyStaticText, onLanguageChange, t } from './i18n/index.mjs';
 import { attachDebug } from './ui/debug.mjs';
 
@@ -154,6 +155,12 @@ const languagePicker = createLanguagePicker({
   },
 });
 
+const minimap = createMinimap({
+  button: document.getElementById('minimap'),
+  // 팜플렛은 다음 작업이다. 그때 이 한 줄이 팜플렛 펼치기로 바뀐다.
+  onOpen: () => toast(t('toast.pamphletSoon')),
+});
+
 let wantedForSheet = null;
 let sheetCell = { i: 0, j: 0 };
 
@@ -165,6 +172,9 @@ let sheetCell = { i: 0, j: 0 };
  * 중앙 칸이 바뀔 때만 hash 를 건드린다. 요구사항 6장이 원래 말한 것이다.
  */
 let lastCenter = null;
+
+/** 미니맵의 가운데 좌표. 중앙 칸이 바뀔 때만 새로 만든다. */
+let mapSpot = null;
 
 // ── 화면 크기 ────────────────────────────────────────────────────────────
 
@@ -323,6 +333,9 @@ function applyWorld() {
   document.body.style.setProperty('--depth', isDeepestFloor(state.tier) ? '1' : '0');
   camera.snapTo({ x: 0, y: 0 });
   lastCenter = null;
+  // 층이 바뀌면 지도가 기억한 색을 버린다. 같은 좌표라도 다른 그림이다.
+  mapSpot = null;
+  minimap.reset();
 }
 
 /**
@@ -651,6 +664,23 @@ function frame(now) {
       lastCenter = { i, j };
       const [cx, cy] = stage.coordOf(i, j);
       hash.set({ ...state, x: cx, y: cy }, { paused: input.dragging || input.pinching });
+      // 미니맵의 가운데도 이 칸이다. 좌표는 여기서만 만든다 — 프레임마다
+      // 만들면 층 16 에서 그것만으로 예산을 먹는다(위 주석과 같은 이유).
+      mapSpot = { x: cx, y: cy };
+    }
+
+    // 지도는 줌에 따라 "보이는 범위" 네모가 달라지므로 매 프레임 물어본다.
+    // 실제 다시 그리기는 update 안에서 가려낸다 (같은 그림이면 건너뛴다).
+    if (mapSpot) {
+      minimap.update({
+        tier: state.tier,
+        locality: state.locality,
+        x: mapSpot.x,
+        y: mapSpot.y,
+        across: stage.view.width / camera.zoom,
+        cell: { i, j },
+        objects: stage.lobbyObjects,
+      });
     }
   }
 
@@ -717,6 +747,10 @@ Object.assign(window, {
         hasImage: Boolean(object.bitmap),
         action: object.action ?? null,
       }));
+    },
+    /** 미니맵. 화면 검사가 갱신이 도는지와 캐시가 사는지를 본다. */
+    get minimap() {
+      return minimap.stats;
     },
     get curtain() {
       return {

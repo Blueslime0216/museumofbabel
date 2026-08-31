@@ -1801,6 +1801,72 @@ for (const size of ['mobile', 'desktop']) {
     check('로비에서는 작품 시트가 열리지 않는다', sheet === 'hidden', String(sheet));
   }
 
+  // ── 5.9 미니맵 ────────────────────────────────────────────────────────
+  //
+  // 지도가 거짓말을 하는지는 눈으로 알 수 없다. 색이 늘 그럴듯하게 나온다.
+  // 그래서 그려진 픽셀을 직접 세고, 로비와 작품 층이 다른 방식으로 그려지는지
+  // 본다(로비는 물건, 작품 층은 주소에서 읽은 색).
+
+  /** 지도 캔버스의 픽셀을 읽어 서로 다른 색이 몇 가지인지 센다. */
+  const mapColours = target =>
+    target.evaluate(() => {
+      const canvas = document.querySelector('#minimap canvas');
+      const ctx = canvas.getContext('2d');
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const seen = new Set();
+      for (let at = 0; at < data.length; at += 4) {
+        seen.add((data[at] << 16) | (data[at + 1] << 8) | data[at + 2]);
+      }
+      return { colours: seen.size, width: canvas.width };
+    });
+
+  {
+    const box = await page.locator('#minimap').boundingBox();
+    check('미니맵이 좌상단에 있다', box !== null && box.x < 40 && box.y < 40, JSON.stringify(box));
+    check('미니맵이 정사각형이다', box !== null && Math.abs(box.width - box.height) < 1);
+
+    const lobbyMap = await page.evaluate(() => window.__museum.minimap);
+    check('로비에서도 지도가 그려진다', lobbyMap.painted > 0, `${lobbyMap.painted}번`);
+    // 로비에는 작품이 없으므로 주소에서 색을 읽을 일이 없다. 읽으면 헛일이다.
+    check('로비 지도는 주소를 읽지 않는다', lobbyMap.cached === 0, `${lobbyMap.cached}칸`);
+
+    const lobbyPixels = await mapColours(page);
+    check(
+      '로비 지도에 물건이 찍혀 있다',
+      lobbyPixels.colours >= 2,
+      `${lobbyPixels.colours}가지 색`,
+    );
+
+    // 작품 층으로 옮기면 지도가 그 층의 색으로 바뀐다.
+    await page.evaluate(() => window.__museum.jumpRandom(8));
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    await page.waitForTimeout(400);
+
+    const floorMap = await page.evaluate(() => window.__museum.minimap);
+    check(
+      '작품 층에서는 주소에서 색을 읽는다',
+      floorMap.cached === 33 * 33,
+      `${floorMap.cached}칸`,
+    );
+
+    const floorPixels = await mapColours(page);
+    // 단색이면 색을 못 읽은 것이다. 실제 층은 칸마다 기준 색이 다르다.
+    check(
+      '작품 층 지도가 여러 색으로 채워진다',
+      floorPixels.colours >= 20,
+      `${floorPixels.colours}가지 색`,
+    );
+
+    // 지도는 버튼이다. 팜플렛은 아직 없으므로 그 사실을 알린다.
+    const before = await page.locator('.toast').count();
+    await page.locator('#minimap').click();
+    await page.waitForTimeout(600);
+    const after = await page.locator('.toast').count();
+    check('미니맵을 누르면 알림이 뜬다', after > before, `토스트 ${before} → ${after}`);
+  }
+
   check('로비 검사에서 콘솔 오류가 없다', page.errors.length === 0, page.errors.join(' / '));
   await page.close();
 }

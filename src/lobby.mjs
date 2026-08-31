@@ -46,6 +46,9 @@ export const LOBBY_SPAN = axisSize(LOBBY_AXIS_BITS);
 /** 벽 색. style.css 의 --wall 과 같아야 이어져 보인다. */
 const WALL = [0x12, 0x10, 0x0e];
 
+/** 같은 벽 색을 CSS 문자열로. 미니맵이 로비를 이 색으로 칠한다. */
+export const LOBBY_WALL = `rgb(${WALL[0]}, ${WALL[1]}, ${WALL[2]})`;
+
 /**
  * 로비 칸 하나를 그린다.
  *

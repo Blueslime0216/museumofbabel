@@ -75,6 +75,8 @@ export default {
   "lobby.today": "今日の絵",
   "lobby.patron": "支援者からの寄託",
   "lobby.workshop": "体験室",
+  "minimap.label": "周辺の地図 · 押すとパンフレットが開きます",
+  "toast.pamphletSoon": "パンフレットはまだ準備中です",
   "lobby.qr": "QRコードをつくる",
   "lobby.exit": "ロビーへ戻る",
   "toast.qrSoon": "QRコード工房はまだ準備中です",
