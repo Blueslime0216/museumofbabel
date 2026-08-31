@@ -1844,9 +1844,17 @@ for (const size of ['mobile', 'desktop']) {
     });
 
   {
-    const box = await page.locator('#minimap').boundingBox();
+    const box = await page.locator('#minimap-open').boundingBox();
     check('미니맵이 좌상단에 있다', box !== null && box.x < 40 && box.y < 40, JSON.stringify(box));
-    check('미니맵이 정사각형이다', box !== null && Math.abs(box.width - box.height) < 1);
+    check('지도가 정사각형이다', box !== null && Math.abs(box.width - box.height) < 1);
+
+    // 조작 줄은 지도 **아래**에 붙는다. 위나 옆이면 지도를 가린다.
+    const bar = await page.locator('#minimap-mode').boundingBox();
+    check(
+      '조작 줄이 지도 아래에 붙는다',
+      bar !== null && bar.y >= box.y + box.height - 1,
+      `지도 ${Math.round(box.y + box.height)} / 단추 ${Math.round(bar?.y ?? -1)}`,
+    );
 
     const lobbyMap = await page.evaluate(() => window.__museum.minimap);
     check('로비에서도 지도가 그려진다', lobbyMap.painted > 0, `${lobbyMap.painted}번`);
@@ -1890,7 +1898,7 @@ for (const size of ['mobile', 'desktop']) {
   // **접히는 단계를 거쳐서 사라지는지**는 여기서 볼 수 있다 — 그것을 건너뛰면
   // 모션이 아예 없는 것이고, 실제로 hidden 을 먼저 주면 그렇게 된다.
   {
-    await page.locator('#minimap').click();
+    await page.locator('#minimap-open').click();
     await page.waitForTimeout(700);
 
     const open = await page.evaluate(() => window.__museum.pamphlet);
@@ -1929,7 +1937,7 @@ for (const size of ['mobile', 'desktop']) {
     check('층을 고르면 팜플렛이 접힌다', moved.pamphlet === 'hidden', moved.pamphlet);
 
     // 체험관으로. 로비에 딸린 방이므로 층은 0이 된다.
-    await page.locator('#minimap').click();
+    await page.locator('#minimap-open').click();
     await page.waitForTimeout(700);
     await page.locator('#pamphlet-to-workshop').click();
     await traveled(page);
@@ -1944,7 +1952,7 @@ for (const size of ['mobile', 'desktop']) {
     );
 
     // 접히는 단계를 거쳐서 사라진다. 곧바로 hidden 이면 모션이 없다.
-    await page.locator('#minimap').click();
+    await page.locator('#minimap-open').click();
     await page.waitForTimeout(700);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(60);
@@ -1964,18 +1972,17 @@ for (const size of ['mobile', 'desktop']) {
     await page.waitForTimeout(300);
     const byColour = await mapColours(page);
 
-    await page.locator('#minimap').click();
-    await page.waitForTimeout(700);
-    await page.locator('#pamphlet-mode-row button[data-mode="rooms"]').click();
+    // 방식은 지도 아래의 단추가 돌린다. 두 가지뿐이라 목록을 열지 않는다.
+    await page.locator('#minimap-mode').click();
     await page.waitForTimeout(400);
 
     const rooms = await page.evaluate(() => ({
       mode: window.__museum.minimap.mode,
-      pamphlet: window.__museum.pamphlet.state,
+      label: document.getElementById('minimap-mode').textContent.trim(),
     }));
-    check('팜플렛에서 전시실 방식으로 바꿀 수 있다', rooms.mode === 'rooms', rooms.mode);
-    // 방식을 바꾸는 것은 자리를 옮기는 일이 아니다. 종이가 닫히면 안 된다.
-    check('방식을 바꿔도 팜플렛은 열려 있다', rooms.pamphlet === 'open', rooms.pamphlet);
+    check('지도 아래 단추로 전시실 방식으로 바꾼다', rooms.mode === 'rooms', rooms.mode);
+    // 단추의 글자가 지금 방식이다. 비어 있으면 무엇인지 알 수 없다.
+    check('방식 단추가 지금 방식을 보여 준다', rooms.label.length > 0, rooms.label);
 
     const byRooms = await mapColours(page);
     check('전시실 방식은 색이 방 수만큼으로 줄어든다', byRooms.colours < byColour.colours, `${byColour.colours} → ${byRooms.colours}`);
@@ -1991,7 +1998,69 @@ for (const size of ['mobile', 'desktop']) {
     });
     const remembered = await page.evaluate(() => window.__museum.minimap.mode);
     check('고른 방식을 다시 열어도 기억한다', remembered === 'rooms', remembered);
-    await page.evaluate(() => window.__museum.setMinimapMode('colour'));
+    await page.locator('#minimap-mode').click();
+    await page.waitForTimeout(300);
+  }
+
+  // ── 5.11b 지도 배율 ───────────────────────────────────────────────────
+  //
+  // 배율은 지도가 덮는 넓이다. 넓힐 때 칸마다 값을 물으면 0.25배에서 17,424칸이
+  // 되어 층 32에서 1.3초다. 그래서 띄어 읽어 표본을 묶는다 — 그 성질을 여기서 본다.
+  {
+    const start = await page.evaluate(() => window.__museum.minimap);
+    check('처음 배율은 1배다', start.scale === 1, `${start.scale}배`);
+
+    await page.locator('#minimap-in').click();
+    await page.waitForTimeout(300);
+    const closer = await page.evaluate(() => window.__museum.minimap);
+    check('당기면 덮는 칸이 줄어든다', closer.scale === 2 && closer.span < start.span, `${closer.scale}배 · ${closer.span}칸`);
+
+    // 끝까지 당기면 더 당길 수 없다. 눌리지 않는 것으로 알린다.
+    await page.locator('#minimap-in').click();
+    await page.waitForTimeout(250);
+    const inEnd = await page.evaluate(() => ({
+      scale: window.__museum.minimap.scale,
+      disabled: document.getElementById('minimap-in').disabled,
+    }));
+    check('가장 좁게 본 뒤에는 당기는 단추가 멈춘다', inEnd.scale === 4 && inEnd.disabled, JSON.stringify(inEnd));
+
+    // 반대쪽 끝까지. 그리는 값이 배율과 무관하게 묶여 있는지 함께 본다.
+    const before = await page.evaluate(() => window.__museum.minimap.spent);
+    for (let step = 0; step < 4; step++) {
+      await page.locator('#minimap-out').click();
+      await page.waitForTimeout(250);
+    }
+    const outEnd = await page.evaluate(() => ({
+      scale: window.__museum.minimap.scale,
+      span: window.__museum.minimap.span,
+      spent: window.__museum.minimap.spent,
+      disabled: document.getElementById('minimap-out').disabled,
+      label: document.getElementById('minimap-scale').textContent.trim(),
+    }));
+    check(
+      '가장 넓게 본 뒤에는 넓히는 단추가 멈춘다',
+      outEnd.scale === 0.25 && outEnd.disabled,
+      JSON.stringify({ scale: outEnd.scale, disabled: outEnd.disabled }),
+    );
+    check('넓게 보면 덮는 칸이 늘어난다', outEnd.span > start.span, `${outEnd.span}칸`);
+    check('지금 배율이 글자로 보인다', outEnd.label.includes('0.25'), outEnd.label);
+    // 배율을 끝까지 오가도(다섯 번 다시 그림) 값이 작게 남아야 한다.
+    check(
+      '배율을 바꾸는 값이 묶여 있다',
+      outEnd.spent - before < 200,
+      `${(outEnd.spent - before).toFixed(1)}ms`,
+    );
+
+    // 배율도 기억한다.
+    await page.reload({ waitUntil: 'commit' });
+    await page.waitForFunction(() => window.__museum, null, { timeout: 20000 });
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    const keptScale = await page.evaluate(() => window.__museum.minimap.scale);
+    check('고른 배율을 다시 열어도 기억한다', keptScale === 0.25, `${keptScale}배`);
+    await page.evaluate(() => window.__museum.setMinimapScale(1));
+    await page.waitForTimeout(250);
   }
 
   // ── 5.12 지도가 프레임 예산을 먹지 않는다 ──────────────────────────────

@@ -46,13 +46,21 @@
 }
 
 /* 미니맵. 좌상단. 언어 단추(우상단)와 조작 단추(우하단) 사이의 빈 곳이다.
-   가로세로가 같아야 지도의 축척이 두 축에서 같다. */
+   지도 + 조작 줄 둘로 된 세로 판이다. */
 .minimap {
   position: absolute;
   top: calc(var(--pad) + var(--safe-t));
   left: var(--pad);
   width: 132px;
-  height: 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* 지도 자체. 가로세로가 같아야 축척이 두 축에서 같다. */
+.minimap-view {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
   padding: 0;
   overflow: hidden;
   cursor: pointer;
@@ -62,12 +70,48 @@
   border-radius: 0;
   background: var(--wall);
 }
-.minimap canvas {
+.minimap-view canvas {
   display: block;
   width: 100%;
   height: 100%;
   /* 칸이 칸으로 보여야 한다. 보간하면 지도가 뭉갠다. */
   image-rendering: pixelated;
+}
+/* 조작 줄. 지도 아래에 붙는다. */
+.minimap-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+.minimap-btn {
+  flex: 1;
+  min-height: 26px;
+  padding: 0 4px;
+  border: 2px solid var(--on-modal);
+  border-radius: 0;
+  background-image: var(--bg-modal);
+  background-size: cover;
+  color: var(--on-modal);
+  font: 700 11.5px/1 var(--sans);
+  cursor: pointer;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.5px var(--edge-modal);
+}
+.minimap-btn:disabled {
+  /* 끝에 닿았다. 사라지지는 않는다 — 사라지면 자리가 흔들린다. */
+  opacity: 0.4;
+  cursor: default;
+}
+/* 지금 배율. 단추가 아니라 읽을 것이다. */
+.minimap-scale {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  font: 400 10.5px/1 var(--mono);
+  color: var(--on-modal);
+  paint-order: stroke fill;
+  -webkit-text-stroke: 1.4px var(--edge-modal);
 }
 /* 시트가 올라오면 지도는 물러난다. 작품을 보는 동안 지도는 방해다. */
 body[data-sheet='expanded'] .minimap {
@@ -82,7 +126,10 @@ body[data-sheet='expanded'] .minimap {
 @media (max-width: 480px) {
   .minimap {
     width: 104px;
-    height: 104px;
+  }
+  .minimap-btn {
+    min-height: 30px; /* 손가락이 닿아야 한다 */
+    font-size: 11px;
   }
 }
 

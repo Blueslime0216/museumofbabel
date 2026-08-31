@@ -18,9 +18,16 @@
 // 브라우저가 부드럽게 보간해서 칸 경계가 뭉갠다. 작은 캔버스에 원본을 두고
 // `imageSmoothingEnabled = false` 로 확대하면 칸이 칸으로 보인다.
 
-import { createMinimapColours, MINIMAP_SPAN, MINIMAP_MODES } from '../minimap.mjs';
+import {
+  createMinimapColours,
+  MINIMAP_SPAN,
+  MINIMAP_MODES,
+  MINIMAP_SCALES,
+  spanFor,
+} from '../minimap.mjs';
 import { LOBBY_SPAN, LOBBY_WALL } from '../lobby.mjs';
 import { isLobbyTier } from '../codec.mjs';
+import { t, onLanguageChange } from '../i18n/index.mjs';
 
 /** 지금 자리를 나타내는 고리의 색. 어느 그림 위에서도 보이게 흰색이다. */
 const HERE = 'rgba(255, 255, 255, 0.92)';
@@ -37,10 +44,11 @@ const OBJECT = 'rgba(233, 226, 214, 0.78)';
  * `onOpen` 은 눌렀을 때 부른다. 지도는 그림이 아니라 버튼이다 — 팜플렛을 펼치는
  * 손잡이다.
  */
-/** 고른 방식을 기억하는 자리. 다음에 와도 같은 지도를 본다. */
+/** 고른 방식과 배율을 기억하는 자리. 다음에 와도 같은 지도를 본다. */
 const STORE_KEY = 'babel.minimap.mode';
+const STORE_SCALE = 'babel.minimap.scale';
 
-export function createMinimap({ button, onOpen }) {
+export function createMinimap({ root, button, onOpen }) {
   const canvas = button.querySelector('canvas');
   const ctx = canvas.getContext('2d');
   const colours = createMinimapColours();
@@ -54,15 +62,75 @@ export function createMinimap({ button, onOpen }) {
   let spent = 0;
   let size = 0;
   let mode = 'colour';
+  let scale = 1;
+  // 마지막으로 받은 갱신 인자. 방식·배율이 바뀌면 이것으로 곧바로 다시 그린다.
+  let latest = null;
 
   try {
     const saved = localStorage.getItem(STORE_KEY);
     if (MINIMAP_MODES.includes(saved)) mode = saved;
+    const savedScale = Number(localStorage.getItem(STORE_SCALE));
+    if (MINIMAP_SCALES.includes(savedScale)) scale = savedScale;
   } catch {
     // 저장소를 막아 둔 브라우저가 있다. 기본값으로 간다.
   }
 
+  const modeButton = root?.querySelector('#minimap-mode') ?? null;
+  const outButton = root?.querySelector('#minimap-out') ?? null;
+  const inButton = root?.querySelector('#minimap-in') ?? null;
+  const scaleLabel = root?.querySelector('#minimap-scale') ?? null;
+
+  /** 저장소에 적어 둔다. 막혀 있어도 이번 관람 동안은 유지된다. */
+  function remember(key, value) {
+    try {
+      localStorage.setItem(key, String(value));
+    } catch {
+      /* 막아 둔 브라우저가 있다 */
+    }
+  }
+
+  /** 조작 줄의 글자와 눌림 가능 여부를 지금 상태에 맞춘다. */
+  function renderBar() {
+    if (modeButton) modeButton.textContent = t(`minimap.mode.${mode}`);
+    if (scaleLabel) scaleLabel.textContent = scale === 1 ? '1×' : `${scale}×`;
+    // 배율의 끝에서는 눌러도 할 일이 없다. 눌리지 않는 것으로 그것을 알린다.
+    if (outButton) outButton.disabled = scale <= MINIMAP_SCALES[0];
+    if (inButton) inButton.disabled = scale >= MINIMAP_SCALES[MINIMAP_SCALES.length - 1];
+  }
+
+  /** 배율을 목록에서 한 칸 옮긴다. */
+  function nudge(direction) {
+    const at = MINIMAP_SCALES.indexOf(scale);
+    const next = MINIMAP_SCALES[Math.min(MINIMAP_SCALES.length - 1, Math.max(0, at + direction))];
+    if (next === scale) return;
+    scale = next;
+    remember(STORE_SCALE, scale);
+    renderBar();
+    repaint();
+  }
+
   button.addEventListener('click', () => onOpen?.());
+
+  // 방식을 돌린다. 두 가지뿐이라 목록을 열 이유가 없다 — 누르면 바뀐다.
+  modeButton?.addEventListener('click', () => {
+    const at = MINIMAP_MODES.indexOf(mode);
+    setMode(MINIMAP_MODES[(at + 1) % MINIMAP_MODES.length]);
+    renderBar();
+  });
+  // 넓게 보기 · 좁게 보기. 배율이 클수록 좁은 곳을 크게 본다.
+  outButton?.addEventListener('click', () => nudge(-1));
+  inButton?.addEventListener('click', () => nudge(1));
+
+  /** 방식을 갈아 끼운다. 밖에서도 부른다(검사·자). */
+  function setMode(next) {
+    if (!MINIMAP_MODES.includes(next) || next === mode) return;
+    mode = next;
+    remember(STORE_KEY, next);
+    repaint();
+  }
+
+  onLanguageChange(renderBar);
+  renderBar();
 
   /**
    * 그릴 면적을 화면 배율에 맞춘다. 안 맞추면 흐릿해진다.
@@ -109,14 +177,15 @@ export function createMinimap({ button, onOpen }) {
     }
   }
 
-  return {
-    /**
-     * 지도를 갱신한다. 중앙 칸이 바뀔 때와 줌이 눈에 띄게 바뀔 때만 부른다.
-     *
-     * `across` 는 화면에 보이는 칸 수다. 보이는 범위를 네모로 그리는 데 쓴다.
-     * 지도 안에서 내가 어느 만큼을 보고 있는지가 없으면 축척을 알 수 없다.
-     */
-    update({ tier, locality, x, y, across = 0, cell = null, objects = [] }) {
+  /**
+   * 지도를 갱신한다. 중앙 칸이 바뀔 때와 줌이 눈에 띄게 바뀔 때만 부른다.
+   *
+   * `across` 는 화면에 보이는 칸 수다. 보이는 범위를 네모로 그리는 데 쓴다.
+   * 지도 안에서 내가 어느 만큼을 보고 있는지가 없으면 축척을 알 수 없다.
+   */
+  function update(args) {
+    latest = args;
+    const { tier, locality, x, y, across = 0, cell = null, objects = [] } = args;
       const lobby = isLobbyTier(tier);
 
       // 열쇠에 좌표를 **문자열로 넣지 않는다.** 층 32의 좌표를 십진으로 바꾸는
@@ -124,22 +193,25 @@ export function createMinimap({ button, onOpen }) {
       // 칸 번호(cell)로 견준다 — 좌표가 바뀌면 칸도 바뀐다.
       const key = lobby
         ? `L:${cell?.i},${cell?.j}:${objects.length}:${size}`
-        : `${tier}:${locality}:${cell?.i},${cell?.j}:${mode}:${Math.round(across * 2)}:${size}`;
+        : `${tier}:${locality}:${cell?.i},${cell?.j}:${mode}:${scale}:${Math.round(across * 2)}:${size}`;
       if (key === last) return;
       last = key;
 
       const started = performance.now();
       ctx.clearRect(0, 0, size, size);
 
+      // 지도가 덮는 칸 수. 로비는 방 전체이고, 작품 층은 배율이 정한다.
+      let covers = Number(LOBBY_SPAN);
       if (lobby) {
         paintRoom(size, objects);
       } else {
-        paintCells(size, colours.cells({ tier, locality, x, y, mode }));
+        const cells = colours.cells({ tier, locality, x, y, span: spanFor(scale), mode });
+        covers = cells.covers;
+        paintCells(size, cells);
       }
 
       // 보이는 범위. 지도의 한 칸이 몇 px 인지에서 나온다.
-      const span = lobby ? Number(LOBBY_SPAN) : MINIMAP_SPAN;
-      const perCell = size / span;
+      const perCell = size / covers;
       const middle = lobby ? { x: Number(x) * perCell, y: Number(y) * perCell } : { x: size / 2, y: size / 2 };
 
       if (across > 0) {
@@ -156,10 +228,25 @@ export function createMinimap({ button, onOpen }) {
       ctx.arc(middle.x, middle.y, dot, 0, Math.PI * 2);
       ctx.fill();
 
-      painted++;
-      spent += performance.now() - started;
-      if (cell) button.dataset.cell = `${cell.i},${cell.j}`;
-    },
+    painted++;
+    spent += performance.now() - started;
+    if (cell) button.dataset.cell = `${cell.i},${cell.j}`;
+  }
+
+  /**
+   * 방식이나 배율이 바뀌었을 때 **곧바로** 다시 그린다.
+   *
+   * 이것이 없으면 단추를 눌러도 지도가 그대로다. 갱신은 칸이 바뀔 때만 오므로,
+   * 걸어 나가기 전까지 아무 일도 일어나지 않는다. 눌렀는데 아무 일이 없으면
+   * 단추가 고장난 것으로 읽힌다.
+   */
+  function repaint() {
+    last = null;
+    if (latest) update(latest);
+  }
+
+  return {
+    update,
 
     /** 층을 옮길 때 부른다. 기억한 색을 버린다. */
     reset() {
@@ -176,16 +263,23 @@ export function createMinimap({ button, onOpen }) {
       return mode;
     },
 
-    /** 팜플렛이 부른다. 다음 갱신에서 새 방식으로 다시 그린다. */
+    get scale() {
+      return scale;
+    },
+
+    /** 검사와 자가 배율을 직접 준다. */
+    setScale(next) {
+      if (!MINIMAP_SCALES.includes(next) || next === scale) return;
+      scale = next;
+      remember(STORE_SCALE, scale);
+      renderBar();
+      repaint();
+    },
+
+    /** 밖에서 방식을 갈아 끼운다(검사·자). 조작 줄도 함께 맞춘다. */
     setMode(next) {
-      if (!MINIMAP_MODES.includes(next) || next === mode) return;
-      mode = next;
-      last = null;
-      try {
-        localStorage.setItem(STORE_KEY, next);
-      } catch {
-        // 기억하지 못해도 이번 관람 동안은 유지된다.
-      }
+      setMode(next);
+      renderBar();
     },
 
     /**
@@ -195,7 +289,14 @@ export function createMinimap({ button, onOpen }) {
      * 사람이 눈으로 알 수 없어서 숫자로 내놓는다.
      */
     get stats() {
-      return { painted, cached: colours.size, mode, spent: Math.round(spent * 10) / 10 };
+      return {
+        painted,
+        cached: colours.size,
+        mode,
+        scale,
+        span: spanFor(scale),
+        spent: Math.round(spent * 10) / 10,
+      };
     },
   };
 }

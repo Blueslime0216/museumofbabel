@@ -177,16 +177,11 @@ const pamphlet = createPamphlet({
   onGoFloor: tier => jumpRandom(tier),
   onGoLobby: () => goto({ tier: LOBBY_TIER, ...lobbyHome(), workshop: false }),
   onGoWorkshop: () => goto({ tier: LOBBY_TIER, ...lobbyHome(), workshop: true }),
-  // 지도를 보는 방식. 팜플렛이 고르고 미니맵이 그린다.
-  getMapMode: () => minimap.mode,
-  onMapMode: mode => {
-    minimap.setMode(mode);
-    mapDirty = true;
-  },
 });
 
 const minimap = createMinimap({
-  button: document.getElementById('minimap'),
+  root: document.getElementById('minimap'),
+  button: document.getElementById('minimap-open'),
   onOpen: () => pamphlet.toggle(),
 });
 
@@ -853,9 +848,13 @@ Object.assign(window, {
     get minimap() {
       return minimap.stats;
     },
-    /** 지도 방식을 검사와 자(bench)가 직접 바꾼다. */
+    /** 지도 방식과 배율을 검사와 자(bench)가 직접 바꾼다. */
     setMinimapMode(mode) {
       minimap.setMode(mode);
+      mapDirty = true;
+    },
+    setMinimapScale(scale) {
+      minimap.setScale(scale);
       mapDirty = true;
     },
     /** 팜플렛. 열림 상태와 점의 자리를 화면 검사가 본다. */

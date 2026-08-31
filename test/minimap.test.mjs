@@ -12,7 +12,9 @@ import {
   createMinimapColours,
   MINIMAP_SPAN,
   MINIMAP_MODES,
+  MINIMAP_SCALES,
   ROOM_TINTS,
+  spanFor,
 } from '../src/minimap.mjs';
 import { tierSpec, coordinatesToCode, localityMix, decodeFields, roomOf } from '../src/codec.mjs';
 
@@ -218,4 +220,62 @@ test('두 방식이 서로의 기억을 섞지 않는다', () => {
 
 test('방식 목록에 색과 전시실이 있다', () => {
   assert.deepEqual(MINIMAP_MODES, ['colour', 'rooms']);
+});
+
+// ── 배율 ─────────────────────────────────────────────────────────────────
+
+test('배율이 클수록 좁은 곳을 본다', () => {
+  // 4배는 당겨 보는 것이므로 덮는 칸이 줄어야 한다. 뒤집히면 단추의 뜻이 뒤집힌다.
+  const spans = MINIMAP_SCALES.map(scale => spanFor(scale));
+  for (let at = 1; at < spans.length; at++) {
+    assert.ok(spans[at] < spans[at - 1], `${MINIMAP_SCALES[at]}배가 더 넓다`);
+  }
+  assert.equal(spanFor(1), MINIMAP_SPAN);
+});
+
+test('덮는 칸 수가 늘 홀수다', () => {
+  // 가운데 칸이 하나로 정해져야 지금 자리를 정확히 찍을 수 있다.
+  for (const scale of MINIMAP_SCALES) assert.equal(spanFor(scale) % 2, 1, `${scale}배`);
+});
+
+test('넓게 보아도 물어보는 칸 수가 묶여 있다', () => {
+  // 0.25배는 한 변 132칸, 곧 17,424칸이다. 층 32에서 칸당 0.074ms 이므로 1.3초다.
+  // 띄어 읽어서 표본을 묶는다. 이 성질이 깨지면 배율 단추가 미술관을 멈춘다.
+  const map = createMinimapColours();
+  for (const scale of MINIMAP_SCALES) {
+    const span = spanFor(scale);
+    const cells = map.cells({ tier: 8, locality: LOCALITY, x: 1000n, y: 1000n, span });
+    assert.ok(cells.span <= 35, `${scale}배에서 표본이 ${cells.span}칸이다`);
+    assert.equal(cells.rgba.length, cells.span * cells.span * 4);
+    // 덮는 넓이는 요청한 것과 같거나 한 걸음 안쪽이어야 한다.
+    assert.ok(cells.covers >= span, `${scale}배가 ${cells.covers}칸만 덮는다`);
+    assert.ok(cells.covers <= span + cells.step, `${scale}배가 너무 넓다`);
+  }
+});
+
+test('띄어 읽어도 가운데는 지금 칸이다', () => {
+  // 표본을 띄우면 가운데가 어긋나기 쉽다. 어긋나면 지도의 점과 실제 자리가 다르다.
+  const map = createMinimapColours();
+  const tier = 8;
+  const spec = tierSpec(tier);
+  const x = 777n;
+  const y = 4242n;
+  for (const scale of MINIMAP_SCALES) {
+    const { span, rgba } = map.cells({
+      tier,
+      locality: LOCALITY,
+      x,
+      y,
+      span: spanFor(scale),
+    });
+    const at = (((span - 1) / 2) * span + (span - 1) / 2) * 4;
+    const tone = baseToneOf(
+      coordinatesToCode(x, y, localityMix(LOCALITY, spec.axisBits), spec.axisBits),
+    );
+    assert.deepEqual(
+      [rgba[at], rgba[at + 1], rgba[at + 2]],
+      [tone.r, tone.g, tone.b],
+      `${scale}배의 가운데가 다르다`,
+    );
+  }
 });

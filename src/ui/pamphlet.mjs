@@ -20,7 +20,6 @@
 
 import { FLOORS, floorFor } from '../floors.mjs';
 import { ROOMS, roomOf, isLobbyTier, tierSpec, LOBBY_AXIS_BITS } from '../codec.mjs';
-import { MINIMAP_MODES } from '../minimap.mjs';
 import { t } from '../i18n/index.mjs';
 
 /** 비율을 잴 때 볼 상위 비트 수. 2^20 이면 화면 한 점보다 훨씬 곱다. */
@@ -44,8 +43,6 @@ export function createPamphlet({
   onGoLobby,
   onGoWorkshop,
   getSpot,
-  getMapMode,
-  onMapMode,
 }) {
   const scrim = document.getElementById('scrim-pamphlet');
   const sheet = document.getElementById('pamphlet');
@@ -53,31 +50,9 @@ export function createPamphlet({
   const floorLine = document.getElementById('pamphlet-floor');
   const roomLine = document.getElementById('pamphlet-room');
   const list = document.getElementById('pamphlet-floors');
-  const modeRow = document.getElementById('pamphlet-mode-row');
 
   let closing = 0;
   let opener = null;
-
-  /**
-   * 지도를 보는 방식을 고르는 칸.
-   *
-   * 왜 여기 있는가: 미니맵 자체에 단추를 얹으면 지도가 좁아지고, 지도를 누르는
-   * 일(팜플렛 펼치기)과 부딪힌다. 팜플렛은 이미 지도에 관한 종이다.
-   */
-  function renderModes() {
-    const current = getMapMode?.() ?? 'colour';
-    modeRow.replaceChildren(
-      ...MINIMAP_MODES.map(mode => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'segment';
-        button.dataset.mode = mode;
-        if (mode === current) button.setAttribute('aria-current', 'true');
-        button.textContent = t(`pamphlet.mode.${mode}`);
-        return button;
-      }),
-    );
-  }
 
   /** 층 목록을 짓는다. 아래가 로비, 위가 깊은 층이다(CSS 가 뒤집어 쌓는다). */
   function renderFloors(spot) {
@@ -154,7 +129,6 @@ export function createPamphlet({
     const spot = getSpot();
     renderHere(spot);
     renderFloors(spot);
-    renderModes();
 
     // 접힌 상태로 붙이고 다음 프레임에 펼친다. 같은 프레임에 두 상태를 주면
     // 브라우저가 하나로 합쳐서 모션이 없다.
@@ -189,15 +163,9 @@ export function createPamphlet({
     else onGoFloor(tier);
   });
 
-  // 지도 방식을 바꾸는 것은 자리를 옮기는 일이 아니다. 팜플렛을 닫지 않는다 —
-  // 바뀐 지도를 바로 확인하려면 지도가 보여야 하고, 지도는 팜플렛 밖에 있다.
-  // 그래서 칸만 갱신하고 열린 채로 둔다.
-  modeRow.addEventListener('click', event => {
-    const button = event.target.closest('button');
-    if (!button) return;
-    onMapMode?.(button.dataset.mode);
-    renderModes();
-  });
+  // 지도를 보는 방식과 배율은 **미니맵 자체의 조작 줄**이 맡는다. 팜플렛에 두면
+  // 바꾼 결과를 보려고 종이를 닫아야 했다 — 조작하는 곳과 결과가 보이는 곳이
+  // 달랐다. 지금은 지도 아래 단추가 바로 그 지도를 바꾼다.
 
   document.getElementById('pamphlet-to-lobby').addEventListener('click', () => {
     close();
@@ -233,8 +201,7 @@ export function createPamphlet({
       const spot = getSpot();
       renderHere(spot);
       renderFloors(spot);
-      renderModes();
-    },
+      },
     get element() {
       return sheet;
     },

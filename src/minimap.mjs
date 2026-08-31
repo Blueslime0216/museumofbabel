@@ -53,8 +53,39 @@ import { tierSpec, coordinatesToCode, localityMix, isLobbyTier, roomOf, ROOMS } 
  */
 export const MINIMAP_SPAN = 33;
 
-/** 볼 수 있는 방식. 팜플렛이 이 목록으로 단추를 짓는다. */
+/** 볼 수 있는 방식. 미니맵의 단추가 이 목록을 돌린다. */
 export const MINIMAP_MODES = ['colour', 'rooms'];
+
+/**
+ * 고를 수 있는 배율. 1이 기본이고 크면 당겨 본다.
+ *
+ * 배율은 지도가 **덮는 넓이**를 뜻한다. 4배면 기본의 4분의 1만큼을 크게 보고,
+ * 0.25배면 네 배 넓은 곳을 작게 본다.
+ */
+export const MINIMAP_SCALES = [0.25, 0.5, 1, 2, 4];
+
+/**
+ * 한 지도에서 값을 물어볼 칸의 최대 개수.
+ *
+ * 0.25배로 넓히면 한 변이 132칸, 곧 17,424칸이 된다. 층 32에서 칸당 0.074ms 이므로
+ * 1.3초다. 그것을 낼 수 없다.
+ *
+ * 그래서 넓힐 때는 **띄어 읽는다.** 지도가 132칸을 덮더라도 값을 묻는 것은 33칸
+ * 간격으로 고른 표본뿐이다. 지도가 거칠어지는 것은 축척이 작아졌다는 뜻이므로
+ * 오히려 맞고, 값은 배율과 무관하게 일정하다.
+ */
+const MAX_SAMPLES = 33;
+
+/** 배율 → 지도가 덮는 칸 수. 홀수로 만들어 가운데 칸을 남긴다. */
+export function spanFor(scale, base = MINIMAP_SPAN) {
+  const wanted = Math.max(3, Math.round(base / scale));
+  return wanted % 2 === 1 ? wanted : wanted + 1;
+}
+
+/** 몇 칸마다 하나씩 물어볼 것인가. 넓을 때만 1보다 커진다. */
+export function stepFor(span) {
+  return Math.max(1, Math.ceil(span / MAX_SAMPLES));
+}
 
 /** 캐시 열쇠로 쓸 하위 비트. 26비트씩 두 축이면 52비트로 안전한 정수다. */
 const KEY_BITS = 26n;
@@ -145,9 +176,18 @@ export function createMinimapColours() {
      * 감기지 않게 잘라 내면 실제로 갈 수 있는 곳이 지도에서 사라진다.
      */
     cells({ tier, locality, x, y, span = MINIMAP_SPAN, mode = 'colour' }) {
-      const rgba = new Uint8ClampedArray(span * span * 4);
+      // 그리는 알맹이는 표본 격자다. 띄어 읽으면 span 보다 작다.
+      //
+      // 표본 수를 홀수로 만든다. 그래야 가운데 표본이 **정확히 지금 칸**이 된다.
+      // 짝수면 가운데가 두 표본 사이에 떨어져서, 지도의 가운데 점과 실제 자리가
+      // 반 칸씩 어긋난다.
+      const step = stepFor(span);
+      const even = Math.ceil(span / step);
+      const across = even % 2 === 1 ? even : even + 1;
+      const covers = across * step;
+      const rgba = new Uint8ClampedArray(across * across * 4);
       // 로비와 체험관에는 작품이 없다. 색을 물을 대상이 없으므로 비워 준다.
-      if (isLobbyTier(tier)) return { span, rgba, empty: true };
+      if (isLobbyTier(tier)) return { span: across, covers, step, rgba, empty: true };
 
       const floor = `${tier}:${locality}`;
       if (floor !== cachedFloor) {
@@ -162,16 +202,18 @@ export function createMinimapColours() {
       const spec = tierSpec(tier);
       const mask = (1n << BigInt(spec.axisBits)) - 1n;
       const mix = localityMix(locality, spec.axisBits);
-      const half = BigInt((span - 1) / 2);
+      // 가운데 표본을 기준으로 잰다. 표본이 홀수이므로 정확히 지금 칸이다.
+      const half = BigInt((across - 1) / 2);
+      const stride = BigInt(step);
       const rooms = mode === 'rooms';
 
       let at = 0;
-      for (let row = 0; row < span; row++) {
-        const cy = (y - half + BigInt(row)) & mask;
+      for (let row = 0; row < across; row++) {
+        const cy = (y + (BigInt(row) - half) * stride) & mask;
         // 열쇠의 y 쪽은 줄마다 한 번만 만든다.
         const keyY = Number(cy & KEY_MASK);
-        for (let column = 0; column < span; column++) {
-          const cx = (x - half + BigInt(column)) & mask;
+        for (let column = 0; column < across; column++) {
+          const cx = (x + (BigInt(column) - half) * stride) & mask;
           const key = Number(cx & KEY_MASK) * KEY_SPAN + keyY;
           let tone = cache.get(key);
           if (tone === undefined) {
@@ -188,7 +230,9 @@ export function createMinimapColours() {
         }
       }
 
-      return { span, rgba, empty: false };
+      // span 은 그림의 한 변(표본 수)이고 covers 는 그 그림이 덮는 칸 수다.
+      // 보이는 범위 네모를 그리는 쪽이 covers 를 쓴다.
+      return { span: across, covers, step, rgba, empty: false };
     },
 
     /** 층을 옮길 때 부른다. 검사가 캐시 초기화를 직접 확인한다. */

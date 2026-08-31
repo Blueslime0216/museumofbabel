@@ -95,16 +95,50 @@
         </svg>
       </button>
 
-      <!-- 미니맵. 좌상단. 지금 자리를 가운데 둔 지도이며, 누르면 팜플렛이 펼쳐진다.
+      <!-- 미니맵. 좌상단. 지금 자리를 가운데 둔 지도이며, 지도를 누르면 팜플렛이
+           펼쳐진다. 아래 줄에서 보는 방식과 배율을 바꾼다.
+
+           지도를 감싼 것이 단추가 아니라 div 인 이유: 단추 안에 단추를 넣을 수
+           없다. 지도 자체가 단추이고 조작 줄은 그 밖이다.
+
            캔버스 크기는 화면 배율에 맞춰 js 가 정한다. 여기서 주면 흐릿해진다. -->
-      <button
-        class="ui minimap"
-        id="minimap"
-        data-i18n-label="minimap.label"
-        aria-label="Map of your surroundings. Press to open the pamphlet."
-      >
-        <canvas aria-hidden="true"></canvas>
-      </button>
+      <div class="ui minimap" id="minimap">
+        <button
+          class="minimap-view"
+          id="minimap-open"
+          data-i18n-label="minimap.label"
+          aria-label="Map of your surroundings. Press to open the pamphlet."
+        >
+          <canvas aria-hidden="true"></canvas>
+        </button>
+        <div class="minimap-bar">
+          <button
+            class="minimap-btn minimap-mode"
+            id="minimap-mode"
+            data-i18n-label="minimap.mode"
+            aria-label="Change what the map shows"
+          ></button>
+        </div>
+        <div class="minimap-bar">
+          <button
+            class="minimap-btn"
+            id="minimap-out"
+            data-i18n-label="minimap.out"
+            aria-label="Show more of the floor"
+          >
+            −
+          </button>
+          <span class="minimap-scale" id="minimap-scale" aria-hidden="true">1×</span>
+          <button
+            class="minimap-btn"
+            id="minimap-in"
+            data-i18n-label="minimap.in"
+            aria-label="Show less of the floor"
+          >
+            +
+          </button>
+        </div>
+      </div>
       <div class="ui controls" id="controls">
         <button
           class="pill"
@@ -339,13 +373,6 @@
           </div>
           <p class="fold-line" id="pamphlet-floor"></p>
           <p class="modal-note" id="pamphlet-room"></p>
-          <!-- 지도를 어떻게 볼지. 찾기 모달의 층 고르기와 같은 부품이다. -->
-          <div class="segmented" id="pamphlet-mode" role="group" aria-labelledby="pamphlet-mode-label">
-            <span class="segmented-label" id="pamphlet-mode-label" data-i18n="pamphlet.mapMode">
-              Map
-            </span>
-            <div class="segmented-row" id="pamphlet-mode-row"></div>
-          </div>
         </section>
         <!-- 2폭: 건물 단면도 -->
         <section class="fold">
