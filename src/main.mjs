@@ -32,7 +32,7 @@ import { createCurtainState, attachCurtain, PHASE, OPEN_MIN_MS } from './curtain
 import { createTiles } from './tiles.mjs';
 import { createStage } from './stage.mjs';
 import { createInput } from './input.mjs';
-import { readState, readLegacyHash, createHashWriter } from './hash.mjs';
+import { readState, readLegacyHash, createHashWriter, shareUrlFor } from './hash.mjs';
 import { applyTheme } from './theme.mjs';
 import { createToasts } from './ui/toast.mjs';
 import { createSheet } from './ui/sheet.mjs';
@@ -314,6 +314,17 @@ function labelLobbyObjects(objects) {
   return objects;
 }
 
+/**
+ * 그 자리를 새 탭에서 연다.
+ *
+ * `noopener` 를 준다. 새 탭이 이쪽 창을 만질 수 있게 열면 그 탭의 스크립트가
+ * 우리 창을 다른 곳으로 보낼 수 있다. 우리 자신을 여는 것이라 위험은 없지만,
+ * 링크의 기본 예절이므로 지킨다.
+ */
+function openInNewTab(spot) {
+  window.open(shareUrlFor(spot), '_blank', 'noopener');
+}
+
 async function prepareLobby() {
   if (!isLobbyTier(state.tier)) {
     stage.setLobbyObjects([]);
@@ -348,11 +359,14 @@ async function prepareLobby() {
  * 로고에는 `action` 이 없다. 표지는 버튼이 아니므로 눌러도 아무 일이 없는 것이
  * 맞다. 눌리는 물건(오늘의 그림 · 후원자 · 체험관 포털)은 뒤에 들어온다.
  */
-function tapLobbyObject(object) {
+function tapLobbyObject(object, keys = {}) {
   // 그림을 누르면 그 그림이 실제로 걸려 있는 자리로 간다. 오늘의 그림과 후원자의
   // 그림이 그렇다. 로비에서 본 것과 도착해서 보는 것이 같아야 한다.
   if (object.action === 'artwork' && object.address) {
-    goto(object.address);
+    // Ctrl · Cmd · 가운데 버튼은 새 탭이다. 로비를 떠나지 않고 그림을 열어 볼 수
+    // 있어야 한다 — 서른한 장을 하나씩 눌러 보는 것이 로비에서 하는 일이다.
+    if (keys.newTab) openInNewTab(object.address);
+    else goto(object.address);
     return;
   }
 
@@ -522,14 +536,22 @@ const input = createInput({
   camera,
   stage,
   isBlocked: () => curtain.busy,
-  onTap: (i, j, screenX, screenY) => {
+  onTap: (i, j, screenX, screenY, keys = {}) => {
     keyboardMode = false;
     document.body.dataset.keyboard = '0';
 
     // 로비에는 작품이 없다. 대신 놓인 물건이 눌린다.
     if (isLobbyTier(state.tier)) {
       const object = stage.lobbyObjectAt(screenX, screenY);
-      if (object) tapLobbyObject(object);
+      if (object) tapLobbyObject(object, keys);
+      return;
+    }
+
+    // Ctrl · Cmd · 가운데 버튼은 "새 탭" 이다. 캔버스에는 링크가 없으니 우리가
+    // 그 뜻을 지킨다. 브라우저의 규칙은 캔버스 안에서도 규칙이다.
+    if (keys.newTab) {
+      const [x, y] = stage.coordOf(i, j);
+      openInNewTab({ tier: state.tier, locality: state.locality, x, y });
       return;
     }
 
@@ -670,6 +692,22 @@ document.getElementById('btn-floor').addEventListener('click', () => floorPicker
 document.getElementById('btn-language').addEventListener('click', () => languagePicker.open());
 
 window.addEventListener('resize', resize);
+
+/**
+ * 로비의 물건 위에서는 손 모양이 된다.
+ *
+ * 캔버스는 그 안에 무엇이 눌리는지 브라우저에 말해 주지 않으므로, 눌릴 것 위에
+ * 있다는 것을 우리가 알려야 한다. 그림 서른한 장이 걸려 있는데 어느 것이 눌리는
+ * 것인지 모른 채로 두면 로비가 그림판으로 보인다.
+ */
+canvas.addEventListener('pointermove', event => {
+  if (event.pointerType !== 'mouse') return;
+  const rect = canvas.getBoundingClientRect();
+  const over =
+    isLobbyTier(state.tier) &&
+    stage.lobbyObjectAt(event.clientX - rect.left, event.clientY - rect.top);
+  canvas.style.cursor = over ? 'pointer' : '';
+});
 
 // 옛 `#` 링크를 주소창에 붙였을 때만 일어난다. 표준형은 `?a=` 이고 그것을
 // 붙이면 페이지가 새로 뜨므로 이벤트가 필요 없다.
@@ -899,7 +937,8 @@ Object.assign(window, {
       return {
         state: pamphlet.state,
         dot: { left: dot.style.left, top: dot.style.top },
-        floors: [...document.querySelectorAll('#pamphlet-floors button')].map(button => ({
+        // 단면도의 칸은 링크다(새 탭·주소 복사가 공짜로 따라온다).
+        floors: [...document.querySelectorAll('#pamphlet-floors a')].map(button => ({
           tier: button.dataset.tier ?? null,
           workshop: button.dataset.workshop === '1',
           current: button.getAttribute('aria-current') === 'true',

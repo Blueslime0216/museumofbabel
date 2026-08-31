@@ -417,13 +417,21 @@
             the lobby holds the sign, today's pictures and the workshop.
           </p>
           <!-- 가는 곳 둘은 나란히, 닫기는 따로. 찾기 모달의 취소·이동과 같은 규격이다. -->
+          <!-- 단추가 아니라 링크다. 다른 자리로 가는 일이므로 Ctrl+클릭과 가운데
+               버튼이 새 탭을 열어야 한다. 평범한 누름은 js 가 가로채서 커튼과
+               함께 옮긴다. -->
           <div class="modal-actions">
-            <button class="btn" id="pamphlet-to-lobby" data-i18n="pamphlet.toLobby">
+            <a class="btn" href="/lobby" id="pamphlet-to-lobby" data-i18n="pamphlet.toLobby">
               To the lobby
-            </button>
-            <button class="btn" id="pamphlet-to-workshop" data-i18n="pamphlet.toWorkshop">
+            </a>
+            <a
+              class="btn"
+              href="/workshop"
+              id="pamphlet-to-workshop"
+              data-i18n="pamphlet.toWorkshop"
+            >
               To the workshop
-            </button>
+            </a>
           </div>
           <div class="modal-actions">
             <button class="btn" data-close data-i18n="common.close">Close</button>

@@ -69,7 +69,9 @@ export function createInput({
   }
 
   element.addEventListener('pointerdown', event => {
-    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    // 가운데 버튼도 받는다. 브라우저에서 "새 탭으로 열기" 를 뜻하는 누름이다.
+    // 오른쪽 버튼(2)은 받지 않는다 — 그것은 맥락 메뉴의 것이다.
+    if (event.pointerType === 'mouse' && event.button !== 0 && event.button !== 1) return;
     if (blocked()) return;
 
     element.setPointerCapture(event.pointerId);
@@ -144,8 +146,14 @@ export function createInput({
       if (moved < TAP_SLOP && quick && !blocked()) {
         // 화면 좌표도 함께 넘긴다. 로비의 물건은 격자 칸이 아니라 실수 좌표에
         // 얹혀 있어서, 칸 번호만으로는 무엇을 눌렀는지 알 수 없다.
+        //
+        // 누름수도 넘긴다. Ctrl(맥은 Cmd)이나 가운데 버튼은 브라우저에서 "새 탭"
+        // 을 뜻한다. 캔버스에는 링크가 없으므로 그 뜻을 우리가 지켜야 한다.
         const [i, j] = stage.cellAt(point[0], point[1]);
-        onTap?.(i, j, point[0], point[1]);
+        onTap?.(i, j, point[0], point[1], {
+          newTab: event.ctrlKey || event.metaKey || event.button === 1,
+          shift: event.shiftKey,
+        });
       }
       onGestureEnd?.();
     }

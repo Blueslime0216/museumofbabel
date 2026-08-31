@@ -856,3 +856,16 @@ body[data-sheet='expanded'] .controls {
 .kept .modal-note {
   margin: 0;
 }
+
+/* 링크로 만든 단추. 자리를 옮기는 것은 링크여야 하고(새 탭·주소 복사·북마크),
+   그러면서 단추처럼 보여야 한다. 밑줄과 글자색만 지우면 나머지는 .btn/.lang 이
+   이미 정해 두었다. */
+a.btn,
+a.lang {
+  text-decoration: none;
+  color: var(--on-modal);
+}
+a.btn {
+  display: grid;
+  place-items: center;
+}

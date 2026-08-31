@@ -19,8 +19,18 @@
 // 상위 몇 자리뿐이고, 그 아래는 화면에서 같은 픽셀이다.
 
 import { FLOORS, floorFor } from '../floors.mjs';
-import { ROOMS, roomOf, isLobbyTier, tierSpec, LOBBY_AXIS_BITS } from '../codec.mjs';
+import {
+  ROOMS,
+  roomOf,
+  isLobbyTier,
+  tierSpec,
+  LOBBY_AXIS_BITS,
+  axisBitsFor,
+  randomCoordinate,
+  DEFAULT_LOCALITY,
+} from '../codec.mjs';
 import { floorThumbnail } from '../minimap.mjs';
+import { ROOM_PATHS, urlFor } from '../hash.mjs';
 import { t } from '../i18n/index.mjs';
 
 /** 비율을 잴 때 볼 상위 비트 수. 2^20 이면 화면 한 점보다 훨씬 곱다. */
@@ -116,14 +126,35 @@ export function createPamphlet({ onGoFloor, onGoLobby, onGoWorkshop, onGoSpot, g
     ask.hidden = true;
   }
 
+  /**
+   * 그 층으로 가는 링크. 무작위 자리를 미리 뽑아 둔다.
+   *
+   * 링크는 진짜 주소여야 한다. `#` 을 넣어 두면 새 탭에서 열었을 때 아무 곳도
+   * 아닌 데로 간다.
+   */
+  function linkFor(floor) {
+    if (floor.isLobby) return ROOM_PATHS.lobby;
+    const [x, y] = randomCoordinate(axisBitsFor(floor.tier));
+    return urlFor({ tier: floor.tier, locality: DEFAULT_LOCALITY, x, y });
+  }
+
   /** 층 목록을 짓는다. 아래가 로비, 위가 깊은 층이다(CSS 가 뒤집어 쌓는다). */
   function renderFloors(spot) {
     const items = [];
 
     for (const floor of FLOORS) {
       const item = document.createElement('li');
-      const button = document.createElement('button');
-      button.type = 'button';
+      // **단추가 아니라 링크다.**
+      //
+      // 층으로 가는 것은 다른 자리로 가는 일이고, 웹에서 그것은 링크다. 링크로
+      // 두면 Ctrl+클릭 · 가운데 버튼 · 우클릭의 "새 탭에서 열기" · 주소 복사 ·
+      // 끌어서 북마크가 전부 브라우저에서 공짜로 따라온다. 단추로 두면 그 전부를
+      // 우리가 흉내내야 하고, 대개 몇 개는 빠뜨린다.
+      //
+      // 누를 자리(href)는 그 층의 무작위 자리다. 층을 옮기면 어차피 새 자리에서
+      // 시작하므로(floor.mjs), 링크가 가리키는 자리도 그 규칙과 같다.
+      const button = document.createElement('a');
+      button.href = linkFor(floor);
       // 층 고르기 모달과 같은 부품이다. 같은 일을 하는 목록이 서로 달라 보이면
       // 안 된다.
       button.className = 'lang';
@@ -146,8 +177,8 @@ export function createPamphlet({ onGoFloor, onGoLobby, onGoWorkshop, onGoSpot, g
       // 체험관은 로비에 딸린 방이다. 로비 바로 위(목록에서는 바로 다음)에 둔다.
       if (floor.isLobby) {
         const inside = document.createElement('li');
-        const enter = document.createElement('button');
-        enter.type = 'button';
+        const enter = document.createElement('a');
+        enter.href = ROOM_PATHS.workshop;
         enter.className = 'lang fold-inside';
         enter.dataset.workshop = '1';
         if (spot.workshop) enter.setAttribute('aria-current', 'true');
@@ -219,8 +250,14 @@ export function createPamphlet({ onGoFloor, onGoLobby, onGoWorkshop, onGoSpot, g
   }
 
   list.addEventListener('click', event => {
-    const button = event.target.closest('button');
+    const button = event.target.closest('a');
     if (!button) return;
+    // 새 탭·새 창으로 열려는 누름은 브라우저에 넘긴다. 우리가 가로채면 링크가
+    // 링크가 아니게 된다. 가운데 버튼은 click 이 아니라 auxclick 이라 여기 안 온다.
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    // 여기서부터는 우리가 옮긴다. 페이지를 새로 띄우지 않는다 — 커튼 연출과
+    // 캐시를 잃기 때문이다.
+    event.preventDefault();
     close();
     if (button.dataset.workshop === '1') {
       onGoWorkshop();
@@ -272,14 +309,18 @@ export function createPamphlet({ onGoFloor, onGoLobby, onGoWorkshop, onGoSpot, g
     onGoSpot?.(going);
   });
 
-  document.getElementById('pamphlet-to-lobby').addEventListener('click', () => {
-    close();
-    onGoLobby();
-  });
-  document.getElementById('pamphlet-to-workshop').addEventListener('click', () => {
-    close();
-    onGoWorkshop();
-  });
+  /** 링크를 우리가 처리한다. 새 탭으로 열려는 누름은 브라우저에 남긴다. */
+  function follow(element, go) {
+    element.addEventListener('click', event => {
+      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      close();
+      go();
+    });
+  }
+
+  follow(document.getElementById('pamphlet-to-lobby'), () => onGoLobby());
+  follow(document.getElementById('pamphlet-to-workshop'), () => onGoWorkshop());
 
   scrim.addEventListener('click', event => {
     if (event.target === scrim || event.target.closest('[data-close]')) close();

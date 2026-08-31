@@ -2013,6 +2013,34 @@ for (const size of ['mobile', 'desktop']) {
     const current = open.floors.find(floor => floor.current);
     check('지금 층이 단면도에 표시된다', current?.tier === '8', JSON.stringify(current));
 
+    // 자리를 옮기는 것은 링크다. 그래야 Ctrl+클릭·가운데 버튼·우클릭 메뉴가
+    // 브라우저에서 그대로 동작한다.
+    const links = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('#pamphlet-floors a')];
+      return {
+        count: rows.length,
+        hrefs: rows.map(row => row.getAttribute('href')),
+        lobby: document.getElementById('pamphlet-to-lobby').getAttribute('href'),
+        workshop: document.getElementById('pamphlet-to-workshop').getAttribute('href'),
+      };
+    });
+    check('단면도의 칸이 진짜 링크다', links.hrefs.every(href => href && href !== '#'), links.hrefs.join(' '));
+    check('로비·체험관이 경로 링크를 가리킨다', links.lobby === '/lobby' && links.workshop === '/workshop', `${links.lobby} ${links.workshop}`);
+
+    // Ctrl+클릭은 새 탭이다. 우리가 가로채면 안 된다.
+    {
+      const before = page.context().pages().length;
+      const spot = await page.evaluate(() => window.__museum.state.x);
+      await page.locator('#pamphlet-floors a[data-tier="16"]').click({ modifiers: ['Control'] });
+      await page.waitForTimeout(900);
+      const pages = page.context().pages();
+      check('Ctrl+클릭이 새 탭을 연다', pages.length === before + 1, `탭 ${before} → ${pages.length}`);
+      // 이 탭은 그대로 있어야 한다. 가로채서 옮겨 버리면 두 곳이 함께 바뀐다.
+      const stayed = await page.evaluate(() => window.__museum.state.x);
+      check('Ctrl+클릭이 지금 탭을 옮기지 않는다', stayed === spot);
+      for (const extra of pages.slice(before)) await extra.close();
+    }
+
     // 평면도의 배경. 비어 있으면 허전하고, 무엇보다 층이 어떤 색인지 알 수 없다.
     const plan = await page.evaluate(() => {
       const canvas = document.getElementById('pamphlet-thumb');
@@ -2075,7 +2103,7 @@ for (const size of ['mobile', 'desktop']) {
     }
 
     // 다른 층을 누르면 그 층의 무작위 자리로 간다.
-    await page.locator('#pamphlet-floors button[data-tier="32"]').click();
+    await page.locator('#pamphlet-floors a[data-tier="32"]').click();
     await traveled(page);
     const moved = await page.evaluate(() => ({
       tier: window.__museum.state.tier,
@@ -2326,6 +2354,49 @@ for (const size of ['mobile', 'desktop']) {
     );
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
+  }
+
+  // ── 5.13b 로비에서도 웹의 규칙을 지킨다 ────────────────────────────────
+  //
+  // 캔버스에는 링크가 없다. 그래서 Ctrl+클릭과 가운데 버튼의 뜻을 우리가 지킨다.
+  // 로비에서 그림을 하나씩 눌러 보는 것이 로비에서 하는 일이므로, 로비를 떠나지
+  // 않고 여는 길이 있어야 한다.
+  {
+    await page.evaluate(() => window.__museum.jumpRandom(0));
+    await page.waitForFunction(() => window.__museum.curtain.phase === 'clear', null, {
+      timeout: 30000,
+    });
+    await page.waitForTimeout(400);
+
+    // 화면에서 오늘의 그림 한 장을 찾는다.
+    const aim = await page.evaluate(() => {
+      for (let x = 40; x < window.innerWidth - 40; x += 12) {
+        for (let y = 200; y < window.innerHeight - 100; y += 12) {
+          const object = window.__museum.stage.lobbyObjectAt(x, y);
+          if (object?.id.startsWith('today-')) return { x, y, id: object.id };
+        }
+      }
+      return null;
+    });
+    check('로비에서 오늘의 그림을 화면에서 찾는다', aim !== null, JSON.stringify(aim));
+
+    const before = page.context().pages().length;
+    const where = await page.evaluate(() => location.pathname);
+    await page.keyboard.down('Control');
+    await page.mouse.click(aim.x, aim.y);
+    await page.keyboard.up('Control');
+    await page.waitForTimeout(900);
+    const pages = page.context().pages();
+    check('로비에서 Ctrl+클릭이 새 탭을 연다', pages.length === before + 1, `탭 ${before} → ${pages.length}`);
+    check('그 새 탭이 작품 주소다', pages.length > before && /[?&]a=/.test(pages.at(-1).url()), pages.at(-1)?.url()?.slice(0, 40) ?? '');
+    check('Ctrl+클릭 뒤에도 로비에 남는다', (await page.evaluate(() => location.pathname)) === where);
+    for (const extra of pages.slice(before)) await extra.close();
+
+    // 마우스가 그림 위에 있으면 손 모양이 된다.
+    await page.mouse.move(aim.x, aim.y);
+    await page.waitForTimeout(150);
+    const overPicture = await page.evaluate(() => document.getElementById('stage').style.cursor);
+    check('그림 위에서 손 모양이 된다', overPicture === 'pointer', overPicture || '없음');
   }
 
   // ── 5.14 경로로 바로 들어오기 ─────────────────────────────────────────
